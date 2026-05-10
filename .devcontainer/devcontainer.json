@@ -1,0 +1,34 @@
+{
+	"name": "resume agent",
+	"image": "python:3.11.15-trixie",
+	"workspaceFolder": "/workspace",
+	"workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+	"remoteUser": "root",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"ms-python.isort",
+				"ms-python.autopep8",
+				"ms-python.mypy-type-checker"
+			]
+		}
+	},
+	"features": {
+		// 安装最新版 uv（强烈推荐）
+		"ghcr.io/jsburckhardt/devcontainer-features/uv:1": {
+			"version": "latest"
+		}
+	},
+	// 容器创建后自动执行的命令（非常重要）
+	"postCreateCommand": "uv sync --dev && uv --version",
+
+	// 可选：让 VS Code 默认使用 uv 创建的虚拟环境
+  	"postStartCommand": "bash .devcontainer/postStart.sh",
+
+	"remoteEnv": {
+		"UV_PYTHON": "3.11"
+	},
+	"host.docker.internal": "host-gateway",   // Linux 需要这行（新版 Docker 已支持）
+  	"runArgs": ["--add-host=host.docker.internal:host-gateway"]
+}
