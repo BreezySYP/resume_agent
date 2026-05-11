@@ -22,3 +22,6 @@ GRAFANA_URL  = os.getenv("GRAFANA_URL", "")
 # ── LangGraph ────────────────────────────────────────────────────────────────
 THREAD_ID    = os.getenv("THREAD_ID", "dev_agent_rag_001")
 GRAPH_CONFIG = {"configurable": {"thread_id": THREAD_ID}}
+
+# ── LangSmith ────────────────────────────────────────────────────────────────
+LANGSMITH_PROJECT = os.getenv("LANGCHAIN_PROJECT", "dev_agent")

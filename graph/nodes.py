@@ -1,9 +1,12 @@
 """
 graph/nodes.py
 Supervisor / Researcher / Coder / Reviewer / Reflection / Final_Answer 节点。
-Agent 实例在首次调用时懒加载，避免 import 时就初始化模型。
+Final_Answer 完成后自动触发 RAGAS 评估。
 """
+from __future__ import annotations
+
 from functools import lru_cache
+from typing import Any
 
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
@@ -11,25 +14,19 @@ from config.tracing import tracer
 from agents.base import llm, build_researcher, build_coder, build_reviewer
 from graph.state import AgentState
 
-# ── 懒加载 Agent（避免模块导入时就连接 Ollama）──────────────────────────────
+# ── 懒加载 Agent ──────────────────────────────────────────────────────────────
 
 @lru_cache(maxsize=1)
 def _researcher():
-    agent = build_researcher()
-    print("✅ Researcher Agent 已创建")
-    return agent
+    a = build_researcher(); print("✅ Researcher ready"); return a
 
 @lru_cache(maxsize=1)
 def _coder():
-    agent = build_coder()
-    print("✅ Coder Agent 已创建")
-    return agent
+    a = build_coder(); print("✅ Coder ready"); return a
 
 @lru_cache(maxsize=1)
 def _reviewer():
-    agent = build_reviewer()
-    print("✅ Reviewer Agent 已创建")
-    return agent
+    a = build_reviewer(); print("✅ Reviewer ready"); return a
 
 
 # ── Supervisor ────────────────────────────────────────────────────────────────
@@ -61,9 +58,9 @@ _NODE_MAP = {
 
 def supervisor_node(state: AgentState) -> dict:
     with tracer.start_as_current_span("supervisor_node"):
-        prompt   = _SUPERVISOR_TMPL.format(messages=state["messages"][-8:])
-        response = llm.invoke([SystemMessage(content=prompt)])
-        decision = response.content.strip().split("\n")[0].strip()
+        prompt    = _SUPERVISOR_TMPL.format(messages=state["messages"][-8:])
+        response  = llm.invoke([SystemMessage(content=prompt)])
+        decision  = response.content.strip().split("\n")[0].strip()
         next_node = _NODE_MAP.get(decision.lower(), decision)
         print(f"🔀 Supervisor → {next_node}")
         return {"next": next_node}
@@ -75,7 +72,17 @@ def researcher_node(state: AgentState) -> dict:
     with tracer.start_as_current_span("researcher_node"):
         print(f"🔍 Researcher ← {state['messages'][-1].content[:60]}...")
         result = _researcher().invoke(state)
-        return {"messages": result["messages"]}
+
+        # 收集 tool 返回内容供 RAGAS 使用
+        tool_contents = [
+            m.content for m in result["messages"]
+            if hasattr(m, "type") and getattr(m, "type", "") == "tool"
+        ]
+        update: dict[str, Any] = {"messages": result["messages"]}
+        if tool_contents:
+            existing = state.get("rag_contexts") or []
+            update["rag_contexts"] = existing + tool_contents
+        return update
 
 
 # ── Coder ─────────────────────────────────────────────────────────────────────
@@ -121,7 +128,7 @@ def reflection_node(state: AgentState) -> dict:
         }
 
 
-# ── Final Answer ──────────────────────────────────────────────────────────────
+# ── Final Answer（含 RAGAS 自动评估）─────────────────────────────────────────
 
 def final_answer_node(state: AgentState) -> dict:
     with tracer.start_as_current_span("final_answer_node"):
@@ -130,9 +137,49 @@ def final_answer_node(state: AgentState) -> dict:
             None,
         )
         text = last_ai.content if last_ai else state["messages"][-1].content
+
         if state.get("reflections"):
             text += "\n\n【系统反思】\n" + "\n".join(state["reflections"])
         if state.get("human_feedback"):
             text += f"\n\n【用户反馈】：{state['human_feedback']}"
+
         print(f"✅ Final Answer: {text[:80]}...")
-        return {"final_answer": text, "messages": state["messages"]}
+
+        ragas_result = _run_ragas_async(state, text)
+
+        return {
+            "final_answer": text,
+            "messages":     state["messages"],
+            "ragas_result": ragas_result,
+        }
+
+
+def _run_ragas_async(state: AgentState, answer: str) -> dict | None:
+    """后台线程跑 RAGAS，不阻塞 Final Answer 返回。"""
+    import threading
+
+    first_human = next(
+        (m for m in state["messages"]
+         if isinstance(m, HumanMessage) and not m.content.startswith("[Reflection]")),
+        None,
+    )
+    if not first_human:
+        return None
+
+    question = first_human.content
+    contexts = state.get("rag_contexts") or []
+    result_holder: dict[str, Any] = {}
+
+    def _eval():
+        try:
+            from ragas.evaluator import run_ragas
+            scores = run_ragas(question=question, contexts=contexts,
+                               answer=answer, llm=llm)
+            result_holder.update(scores)
+        except Exception as e:
+            print(f"⚠️  RAGAS 线程异常: {e}")
+
+    t = threading.Thread(target=_eval, daemon=True)
+    t.start()
+    t.join(timeout=120)
+    return result_holder or None

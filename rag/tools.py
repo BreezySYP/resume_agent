@@ -10,7 +10,7 @@ import hashlib
 from langchain_core.tools import tool
 from langchain_core.documents import Document
 from langchain_tavily import TavilySearch
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_ollama import ChatOllama
 
 from config.settings import OLLAMA_URL, LLM_MODEL
@@ -102,9 +102,9 @@ def tavily_search(query: str) -> str:
 def analyze_code(code: str) -> str:
     """分析代码质量、潜在 bug 和改进建议。"""
     with tracer.start_as_current_span("analyze_code"):
-        return _llm.invoke(
+        return str(_llm.invoke(
             f"请分析以下代码的质量、潜在问题和改进建议：\n\n{code}"
-        ).content
+        ).content)
 
 
 # ── 各 Agent 工具集（供 agents/ 直接 import）────────────────────────────────

@@ -16,7 +16,7 @@ from langchain_community.document_loaders import (
     TextLoader,
     UnstructuredMarkdownLoader,
 )
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from  langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from rag.vector_store import get_vector_store
 
@@ -74,6 +74,7 @@ def ingest_local_files(
 
 
 if __name__ == "__main__":
+    
     files = sys.argv[1:]
     if not files:
         print("用法: python -m rag.ingest <file1> [file2] ...")
