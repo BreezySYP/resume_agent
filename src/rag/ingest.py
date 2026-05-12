@@ -18,7 +18,7 @@ from langchain_community.document_loaders import (
 )
 from  langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from rag.vector_store import get_vector_store
+from src.rag.vector_store import get_vector_store
 
 SUPPORTED = {".pdf", ".txt", ".md", ".markdown"}
 

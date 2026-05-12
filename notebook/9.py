@@ -301,15 +301,15 @@ def run():
         workflow = get_workflow()
         multi_agent = workflow.compile(checkpointer=cp)
 
-        # ui(multi_agent)
+        ui(multi_agent)
         
     
-        ai_reply = multi_agent.invoke({
-            "messages": [HumanMessage(content="帮我优化 AI Engineer 岗位的简历")],
-            "reflections": [],
-            "human_feedback": ""
-        }, config=config)
-        print(ai_reply.get("final_answer", ai_reply["messages"][-1].content))
+        # ai_reply = multi_agent.invoke({
+        #     "messages": [HumanMessage(content="帮我优化 AI Engineer 岗位的简历")],
+        #     "reflections": [],
+        #     "human_feedback": ""
+        # }, config=config)
+        # print(ai_reply.get("final_answer", ai_reply["messages"][-1].content))
 
 
         

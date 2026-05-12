@@ -5,6 +5,7 @@ rag/tools.py
   - tavily_search   : 实时搜索并自动缓存结果
   - analyze_code    : 代码质量分析
 """
+from functools import lru_cache
 import hashlib
 
 from langchain_core.tools import tool
@@ -13,18 +14,21 @@ from langchain_tavily import TavilySearch
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_ollama import ChatOllama
 
-from config.settings import OLLAMA_URL, LLM_MODEL
-from config.tracing import tracer
-from rag.vector_store import get_vector_store
+from src.configs.settings import OLLAMA_URL, LLM_MODEL
+from src.configs.tracing import tracer
+from src.rag.vector_store import get_vector_store
 
 # ── 内部 LLM（analyze_code 专用，不对外暴露）────────────────────────────────
-_llm = ChatOllama(
-    model=LLM_MODEL,
-    temperature=0.2,
-    num_ctx=8192,
-    num_gpu=999,
-    base_url=OLLAMA_URL,
-)
+
+@lru_cache(maxsize=1)
+def _get_llm():
+    return ChatOllama(
+        model=LLM_MODEL,
+        temperature=0.2,
+        num_ctx=8192,
+        num_gpu=999,
+        base_url=OLLAMA_URL,
+    )
 
 _tavily_raw = TavilySearch(max_results=5, search_depth="advanced", include_answer=True)
 _splitter   = RecursiveCharacterTextSplitter(chunk_size=600, chunk_overlap=80)
@@ -102,7 +106,7 @@ def tavily_search(query: str) -> str:
 def analyze_code(code: str) -> str:
     """分析代码质量、潜在 bug 和改进建议。"""
     with tracer.start_as_current_span("analyze_code"):
-        return str(_llm.invoke(
+        return str(_get_llm().invoke(
             f"请分析以下代码的质量、潜在问题和改进建议：\n\n{code}"
         ).content)
 

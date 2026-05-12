@@ -4,8 +4,9 @@ StateGraph 组装。compile() 在 main.py 中调用（传入 checkpointer）。
 """
 from langgraph.graph import StateGraph, START, END
 
-from graph.state import AgentState
-from graph.nodes import (
+import streamlit as st
+from src.graph.state import AgentState
+from src.graph.nodes import (
     supervisor_node,
     researcher_node,
     coder_node,
@@ -14,7 +15,7 @@ from graph.nodes import (
     final_answer_node,
 )
 
-
+@st.cache_resource
 def build_graph() -> StateGraph:
     """返回未编译的 StateGraph，由调用方传入 checkpointer 后编译。"""
     g = StateGraph(AgentState)

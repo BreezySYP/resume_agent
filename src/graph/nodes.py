@@ -10,9 +10,9 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
-from config.tracing import tracer
-from agents.base import llm, build_researcher, build_coder, build_reviewer
-from graph.state import AgentState
+from src.configs.tracing import tracer
+from src.agents.base import llm, build_researcher, build_coder, build_reviewer
+from src.graph.state import AgentState
 
 # ── 懒加载 Agent ──────────────────────────────────────────────────────────────
 
@@ -56,9 +56,32 @@ _NODE_MAP = {
 }
 
 
+_INFO_CHECK_TMPL = """判断当前对话中用户提供的信息是否足够继续执行任务。
+
+对话历史：{messages}
+
+只输出 JSON，不要有其他内容：
+{{"enough": true/false, "question": "如果不够填写需要问用户的问题，够的话填null"}}"""
+MAX_HISTORY=10
+
 def supervisor_node(state: AgentState) -> dict:
     with tracer.start_as_current_span("supervisor_node"):
-        prompt    = _SUPERVISOR_TMPL.format(messages=state["messages"][-8:])
+        messages = state["messages"][-MAX_HISTORY:]
+        # import json
+
+        # # ── 前置：信息充分性检查 ──────────────────────────────
+        # check_prompt = _INFO_CHECK_TMPL.format(messages=messages)
+        # raw = llm.invoke([SystemMessage(content=check_prompt)]).content.strip()
+        # try:
+        #     check = json.loads(raw)
+        # except Exception:
+        #     check = {"enough": True}
+
+        # if not check.get("enough", False):
+        #     return {"next": "Final_Answer"}
+
+        ## old
+        prompt    = _SUPERVISOR_TMPL.format(messages=messages)
         response  = llm.invoke([SystemMessage(content=prompt)])
         decision  = response.content.strip().split("\n")[0].strip()
         next_node = _NODE_MAP.get(decision.lower(), decision)
@@ -132,6 +155,7 @@ def reflection_node(state: AgentState) -> dict:
 
 def final_answer_node(state: AgentState) -> dict:
     with tracer.start_as_current_span("final_answer_node"):
+       
         last_ai = next(
             (m for m in reversed(state["messages"]) if isinstance(m, AIMessage)),
             None,
@@ -172,7 +196,7 @@ def _run_ragas_async(state: AgentState, answer: str) -> dict | None:
 
     def _eval():
         try:
-            from ragas.evaluator import run_ragas
+            from src.ragas_eval.evaluator import run_ragas
             scores = run_ragas(question=question, contexts=contexts,
                                answer=answer, llm=llm)
             result_holder.update(scores)

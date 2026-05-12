@@ -7,12 +7,14 @@ from functools import lru_cache
 from langchain_ollama import OllamaEmbeddings
 from langchain_redis import RedisVectorStore
 
-from config.settings import OLLAMA_URL, EMBED_MODEL, REDIS_URL, VS_INDEX_NAME
+from src.configs.settings import OLLAMA_URL, EMBED_MODEL, REDIS_URL, VS_INDEX_NAME
 
-embeddings = OllamaEmbeddings(
-    model=EMBED_MODEL,
-    base_url=OLLAMA_URL,
-)
+@lru_cache(maxsize=1)
+def get_embedding():
+    return OllamaEmbeddings(
+        model=EMBED_MODEL,
+        base_url=OLLAMA_URL,
+    )
 
 
 @lru_cache(maxsize=1)
@@ -23,7 +25,7 @@ def get_vector_store() -> RedisVectorStore:
     """
     vs = RedisVectorStore.from_texts(
         texts=["__init__"],
-        embedding=embeddings,
+        embedding=get_embedding(),
         index_name=VS_INDEX_NAME,
         redis_url=REDIS_URL,
     )

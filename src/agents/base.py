@@ -7,8 +7,10 @@ from langchain.agents import create_agent
 from langchain_core.messages import SystemMessage
 from langchain_ollama import ChatOllama
 
-from config.settings import OLLAMA_URL, LLM_MODEL
-from rag.tools import researcher_tools, coder_tools, reviewer_tools
+from src.configs.settings import OLLAMA_URL, LLM_MODEL
+from src.rag.tools import researcher_tools, coder_tools, reviewer_tools
+
+print("preparing llm...")
 
 # 共用的 LLM 实例（Agent 内部推理）
 llm = ChatOllama(
@@ -19,6 +21,7 @@ llm = ChatOllama(
     base_url=OLLAMA_URL,
 )
 
+print("✅ llm ready")
 
 def build_researcher():
     return create_agent(
