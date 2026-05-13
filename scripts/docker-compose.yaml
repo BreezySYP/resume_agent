@@ -2,18 +2,85 @@ services:
   tempo:
     image: grafana/tempo:latest
     command: ["-config.file=/etc/tempo.yaml"]
+    container_name: devagent-tempo
     volumes:
       - ./tempo.yaml:/etc/tempo.yaml
     ports:
       - "4317:4317"   # OTLP gRPC  ← your app sends here
       - "3200:3200"   # Tempo HTTP API
+    networks:
+      - devagent-net
+    restart: unless-stopped
 
   grafana:
     image: grafana/grafana:latest
+    container_name: devagent-grafana
     ports:
       - "3000:3000"
     environment:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_FEATURE_TOGGLES_ENABLE=traceToMetrics
+    volumes:
+      - grafana_data:/var/lib/grafana
+      # - ./grafana/provisioning:/etc/grafana/provisioning   # 自动添加 Tempo 数据源（推荐）
+    networks:
+      - devagent-net
 
+  devagent:
+    build: ..
+    container_name: devagent-app
+    ports:
+      - "8501:8501"
+    env_file:
+      - ../.env.prod
+    depends_on:
+      - redis
+      - tempo
+      - ollama
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    networks:
+      - devagent-net
+
+  redis:
+    image: redis/redis-stack:latest
+    container_name: devagent-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - devagent-net
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: devagent-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    networks:
+      - devagent-net
     
+    # GPU 配置（关键）
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+
+networks:
+  devagent-net:
+    driver: bridge
+
+volumes:
+  redis_data:
+  ollama_data:
+  grafana_data:

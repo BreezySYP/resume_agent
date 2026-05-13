@@ -10,9 +10,9 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
-from src.configs.tracing import tracer
-from src.agents.base import llm, build_researcher, build_coder, build_reviewer
-from src.graph.state import AgentState
+from  configs.tracing import tracer
+from  agents.base import llm, build_researcher, build_coder, build_reviewer
+from  graph.state import AgentState
 
 # ── 懒加载 Agent ──────────────────────────────────────────────────────────────
 
@@ -196,7 +196,7 @@ def _run_ragas_async(state: AgentState, answer: str) -> dict | None:
 
     def _eval():
         try:
-            from src.ragas_eval.evaluator import run_ragas
+            from  ragas_eval.evaluator import run_ragas
             scores = run_ragas(question=question, contexts=contexts,
                                answer=answer, llm=llm)
             result_holder.update(scores)

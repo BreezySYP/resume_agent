@@ -15,8 +15,8 @@ from ragas import evaluate
 from ragas.metrics import faithfulness, answer_relevancy
 from langsmith import Client as LangSmithClient
 
-from src.configs.settings import LANGSMITH_PROJECT
-from src.configs.tracing import tracer
+from  configs.settings import LANGSMITH_PROJECT
+from  configs.tracing import tracer
 
 # LangSmith 客户端（LANGCHAIN_API_KEY 在 .env 里）
 _ls_client = LangSmithClient()

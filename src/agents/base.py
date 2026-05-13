@@ -7,8 +7,8 @@ from langchain.agents import create_agent
 from langchain_core.messages import SystemMessage
 from langchain_ollama import ChatOllama
 
-from src.configs.settings import OLLAMA_URL, LLM_MODEL
-from src.rag.tools import researcher_tools, coder_tools, reviewer_tools
+from configs.settings import OLLAMA_URL, LLM_MODEL
+from rag.tools import researcher_tools, coder_tools, reviewer_tools
 
 print("preparing llm...")
 

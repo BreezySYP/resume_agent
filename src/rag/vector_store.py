@@ -7,7 +7,7 @@ from functools import lru_cache
 from langchain_ollama import OllamaEmbeddings
 from langchain_redis import RedisVectorStore
 
-from src.configs.settings import OLLAMA_URL, EMBED_MODEL, REDIS_URL, VS_INDEX_NAME
+from  configs.settings import OLLAMA_URL, EMBED_MODEL, REDIS_URL, VS_INDEX_NAME
 
 @lru_cache(maxsize=1)
 def get_embedding():

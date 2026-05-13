@@ -8,12 +8,11 @@ from pathlib import Path
 import streamlit as st
 from langchain_core.messages import HumanMessage
 
-from src.configs.settings import GRAPH_CONFIG
-from src.rag.ingest import ingest_local_files
+from  configs.settings import GRAPH_CONFIG
+from  rag.ingest import ingest_local_files
 
 
 def run_ui(agent) -> None:
-    print(" preparing UI...")
     st.title("🤖 DevAgent — Multi-Agent RAG 助手")
     st.caption("RAG 知识库 + 实时搜索缓存 | Supervisor 多 Agent 协作")
 

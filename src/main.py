@@ -10,7 +10,7 @@ from langsmith import traceable
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.redis import RedisSaver
 
-from src.configs.settings import REDIS_URL, GRAPH_CONFIG
+from configs.settings import REDIS_URL, GRAPH_CONFIG
 from graph.workflow import build_graph
 from ui.streamlit_app import run_ui
 

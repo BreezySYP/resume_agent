@@ -7,7 +7,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 
-from src.configs.settings import GRAFANA_URL
+from  configs.settings import GRAFANA_URL
 
 _provider = TracerProvider()
 

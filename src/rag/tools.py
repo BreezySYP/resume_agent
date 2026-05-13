@@ -14,9 +14,9 @@ from langchain_tavily import TavilySearch
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_ollama import ChatOllama
 
-from src.configs.settings import OLLAMA_URL, LLM_MODEL
-from src.configs.tracing import tracer
-from src.rag.vector_store import get_vector_store
+from  configs.settings import OLLAMA_URL, LLM_MODEL
+from  configs.tracing import tracer
+from  rag.vector_store import get_vector_store
 
 # ── 内部 LLM（analyze_code 专用，不对外暴露）────────────────────────────────
 
