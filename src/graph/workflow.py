@@ -13,13 +13,14 @@ from  graph.nodes import (
     reviewer_node,
     reflection_node,
     final_answer_node,
+    entry_node
 )
 
 @st.cache_resource
 def build_graph() -> StateGraph:
     """返回未编译的 StateGraph，由调用方传入 checkpointer 后编译。"""
     g = StateGraph(AgentState)
-
+    g.add_node("Entry", entry_node)
     g.add_node("Supervisor",   supervisor_node)
     g.add_node("Researcher",   researcher_node)
     g.add_node("Coder",        coder_node)
@@ -27,7 +28,6 @@ def build_graph() -> StateGraph:
     g.add_node("Reflection",   reflection_node)
     g.add_node("Final_Answer", final_answer_node)
 
-    g.add_edge(START, "Supervisor")
 
     g.add_conditional_edges(
         "Supervisor",
@@ -40,10 +40,12 @@ def build_graph() -> StateGraph:
         },
     )
 
+    g.add_edge(START, "Entry")
+    g.add_edge("Entry", "Supervisor")
     g.add_edge("Researcher",   "Reflection")
     g.add_edge("Reflection",   "Supervisor")   # 回 Supervisor，不直接结束
     g.add_edge("Coder",        "Supervisor")
-    g.add_edge("Reviewer",     "Supervisor")
+    g.add_edge("Reviewer",     "Final_Answer")   # 评审后直接结束，不回 Supervisor
     g.add_edge("Final_Answer", END)
 
     return g

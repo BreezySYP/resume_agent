@@ -15,3 +15,4 @@ class AgentState(TypedDict):
     human_feedback: str
     rag_contexts:   List[str]        # Researcher 收集的检索内容，供 RAGAS 使用
     ragas_result:   Optional[dict]   # 最新一次 RAGAS 评估结果
+    user_question: str

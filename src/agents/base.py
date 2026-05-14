@@ -5,27 +5,13 @@ agents/base.py
 """
 from langchain.agents import create_agent
 from langchain_core.messages import SystemMessage
-from langchain_ollama import ChatOllama
 
-from configs.settings import OLLAMA_URL, LLM_MODEL
+from models.ollama import get_llm
 from rag.tools import researcher_tools, coder_tools, reviewer_tools
-
-print("preparing llm...")
-
-# 共用的 LLM 实例（Agent 内部推理）
-llm = ChatOllama(
-    model=LLM_MODEL,
-    temperature=0.2,
-    num_ctx=8192,
-    num_gpu=999,
-    base_url=OLLAMA_URL,
-)
-
-print("✅ llm ready")
 
 def build_researcher():
     return create_agent(
-        model=llm,
+        model=get_llm(),
         tools=researcher_tools,
         system_prompt=SystemMessage(content=(
             "你是技术研究员，擅长查找最新最佳实践和技术方案。\n"
@@ -37,7 +23,7 @@ def build_researcher():
 
 def build_coder():
     return create_agent(
-        model=llm,
+        model=get_llm(),
         tools=coder_tools,
         system_prompt=SystemMessage(content=(
             "你是资深 Python/C# 开发者，擅长编写高质量、可维护的代码。\n"
@@ -48,7 +34,7 @@ def build_coder():
 
 def build_reviewer():
     return create_agent(
-        model=llm,
+        model=get_llm(),
         tools=reviewer_tools,
         system_prompt=SystemMessage(content=(
             "你是严格的代码审查专家，专注于代码质量、安全性和可维护性。"

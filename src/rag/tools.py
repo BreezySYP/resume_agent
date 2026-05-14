@@ -12,7 +12,6 @@ from langchain_core.tools import tool
 from langchain_core.documents import Document
 from langchain_tavily import TavilySearch
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_ollama import ChatOllama
 
 from  configs.settings import OLLAMA_URL, LLM_MODEL
 from  configs.tracing import tracer
@@ -20,15 +19,7 @@ from  rag.vector_store import get_vector_store
 
 # ── 内部 LLM（analyze_code 专用，不对外暴露）────────────────────────────────
 
-@lru_cache(maxsize=1)
-def _get_llm():
-    return ChatOllama(
-        model=LLM_MODEL,
-        temperature=0.2,
-        num_ctx=8192,
-        num_gpu=999,
-        base_url=OLLAMA_URL,
-    )
+
 
 _tavily_raw = TavilySearch(max_results=5, search_depth="advanced", include_answer=True)
 _splitter   = RecursiveCharacterTextSplitter(chunk_size=600, chunk_overlap=80)

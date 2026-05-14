@@ -11,8 +11,9 @@ from typing import Any
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from  configs.tracing import tracer
-from  agents.base import llm, build_researcher, build_coder, build_reviewer
+from  agents.base import  build_researcher, build_coder, build_reviewer
 from  graph.state import AgentState
+from models.ollama import get_llm
 
 # ── 懒加载 Agent ──────────────────────────────────────────────────────────────
 
@@ -29,6 +30,23 @@ def _reviewer():
     a = build_reviewer(); print("✅ Reviewer ready"); return a
 
 
+# ── entry_node ──────────────────────────────────────────────────────────────
+def entry_node(state: AgentState) -> dict:
+    """入口节点：提取并保存用户原始问题"""
+    user_question = ""
+    
+    if state.get("messages"):
+        last_message = state["messages"][-1]
+        if isinstance(last_message, HumanMessage):
+            user_question = last_message.content.strip()
+    
+    print(f"🔍 Entry Node - 用户问题: {user_question[:80]}{'...' if len(user_question) > 80 else ''}")
+    
+    return {
+        "user_question": user_question,
+        # 可以在这里做一些预处理，比如清理、长度限制等
+    }
+
 # ── Supervisor ────────────────────────────────────────────────────────────────
 
 _SUPERVISOR_TMPL = """你是一个严格且高效的 Supervisor。
@@ -44,9 +62,9 @@ _SUPERVISOR_TMPL = """你是一个严格且高效的 Supervisor。
 - 刚完成 Review → Final_Answer
 - 不要在 Reviewer 和 Reflection 之间反复循环
 
-只返回节点名称（Researcher / Coder / Reviewer / Final_Answer），不要解释。
+根据用户问题，只返回节点名称（Researcher / Coder / Reviewer / Final_Answer），不要解释。
 
-当前对话历史：{messages}"""
+当前对话历史：{messages} 用户问题： {user_question}"""
 
 _NODE_MAP = {
     "final_answer": "Final_Answer",
@@ -56,33 +74,19 @@ _NODE_MAP = {
 }
 
 
-_INFO_CHECK_TMPL = """判断当前对话中用户提供的信息是否足够继续执行任务。
+# _INFO_CHECK_TMPL = """判断当前对话中用户提供的信息是否足够继续执行任务。
 
-对话历史：{messages}
+# 对话历史：{messages}
 
-只输出 JSON，不要有其他内容：
-{{"enough": true/false, "question": "如果不够填写需要问用户的问题，够的话填null"}}"""
+# 只输出 JSON，不要有其他内容：
+# {{"enough": true/false, "question": "如果不够填写需要问用户的问题，够的话填null"}}"""
 MAX_HISTORY=10
 
 def supervisor_node(state: AgentState) -> dict:
     with tracer.start_as_current_span("supervisor_node"):
         messages = state["messages"][-MAX_HISTORY:]
-        # import json
-
-        # # ── 前置：信息充分性检查 ──────────────────────────────
-        # check_prompt = _INFO_CHECK_TMPL.format(messages=messages)
-        # raw = llm.invoke([SystemMessage(content=check_prompt)]).content.strip()
-        # try:
-        #     check = json.loads(raw)
-        # except Exception:
-        #     check = {"enough": True}
-
-        # if not check.get("enough", False):
-        #     return {"next": "Final_Answer"}
-
-        ## old
-        prompt    = _SUPERVISOR_TMPL.format(messages=messages)
-        response  = llm.invoke([SystemMessage(content=prompt)])
+        prompt    = _SUPERVISOR_TMPL.format(user_question=state["user_question"], messages=messages)
+        response  = get_llm().invoke([SystemMessage(content=prompt)])
         decision  = response.content.strip().split("\n")[0].strip()
         next_node = _NODE_MAP.get(decision.lower(), decision)
         print(f"🔀 Supervisor → {next_node}")
@@ -136,13 +140,14 @@ _REFLECTION_TMPL = """你是一个专业的反思节点。
 输出格式：
 总结：...
 问题：...
-下一步建议：（Reviewer / Coder / Final_Answer 中选一个）"""
+根据用户问题{user_question}，下一步建议：（Reviewer / Coder / Final_Answer 中选一个）"""
 
 
 def reflection_node(state: AgentState) -> dict:
     with tracer.start_as_current_span("reflection_node"):
-        prompt   = _REFLECTION_TMPL.format(messages=state["messages"][-10:])
-        response = llm.invoke([SystemMessage(content=prompt)])
+        prompt   = _REFLECTION_TMPL.format(user_question=state["user_question"], 
+                                           messages=state["messages"][-10:])
+        response = get_llm().invoke([SystemMessage(content=prompt)])
         text     = response.content
         print(f"🤔 Reflection: {text[:120]}...")
         return {
@@ -152,16 +157,24 @@ def reflection_node(state: AgentState) -> dict:
 
 
 # ── Final Answer（含 RAGAS 自动评估）─────────────────────────────────────────
+_FINAL_ANSWER_TMPL = """你是一个专业的反思节点。
+总结历史对话中的内容，提取重要信息来回答用户的问题。
+
+历史对话：{messages}，用户问题{user_question}
+输出格式：string，直接给出最终答案，不要任何解释。"""
 
 def final_answer_node(state: AgentState) -> dict:
     with tracer.start_as_current_span("final_answer_node"):
+        response = get_llm().invoke([SystemMessage(content=_FINAL_ANSWER_TMPL.format(
+            user_question=state["user_question"], messages=state["messages"]
+        ))])
        
-        last_ai = next(
-            (m for m in reversed(state["messages"]) if isinstance(m, AIMessage)),
-            None,
-        )
-        text = last_ai.content if last_ai else state["messages"][-1].content
-
+        # last_ai = next(
+        #     (m for m in reversed(response["messages"]) if isinstance(m, AIMessage)),
+        #     None,
+        # )
+        # text = last_ai.content if last_ai else state["messages"][-1].content
+        text = response.content.strip()
         if state.get("reflections"):
             text += "\n\n【系统反思】\n" + "\n".join(state["reflections"])
         if state.get("human_feedback"):
@@ -198,7 +211,7 @@ def _run_ragas_async(state: AgentState, answer: str) -> dict | None:
         try:
             from  ragas_eval.evaluator import run_ragas
             scores = run_ragas(question=question, contexts=contexts,
-                               answer=answer, llm=llm)
+                               answer=answer, llm=get_llm())
             result_holder.update(scores)
         except Exception as e:
             print(f"⚠️  RAGAS 线程异常: {e}")

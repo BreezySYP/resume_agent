@@ -4,17 +4,11 @@ Redis Vector Store - 使用 langchain-redis 默认 schema，避免字段名冲�
 """
 from functools import lru_cache
 
-from langchain_ollama import OllamaEmbeddings
 from langchain_redis import RedisVectorStore
 
-from  configs.settings import OLLAMA_URL, EMBED_MODEL, REDIS_URL, VS_INDEX_NAME
+from  configs.settings import REDIS_URL, VS_INDEX_NAME
+from models.ollama import get_embedding
 
-@lru_cache(maxsize=1)
-def get_embedding():
-    return OllamaEmbeddings(
-        model=EMBED_MODEL,
-        base_url=OLLAMA_URL,
-    )
 
 
 @lru_cache(maxsize=1)

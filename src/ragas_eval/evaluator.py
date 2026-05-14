@@ -12,11 +12,14 @@ from typing import Any
 
 from datasets import Dataset
 from ragas import evaluate
+from ragas.embeddings import LangchainEmbeddingsWrapper
+from ragas.llms import LangchainLLMWrapper
 from ragas.metrics import faithfulness, answer_relevancy
 from langsmith import Client as LangSmithClient
 
 from  configs.settings import LANGSMITH_PROJECT
 from  configs.tracing import tracer
+from models.ollama import get_embedding
 
 # LangSmith 客户端（LANGCHAIN_API_KEY 在 .env 里）
 _ls_client = LangSmithClient()
@@ -60,12 +63,16 @@ def run_ragas(
                 "answer":    answer,
             }
         ])
-
+        ragas_llm = LangchainLLMWrapper(llm)
+        ragas_embeddings = LangchainEmbeddingsWrapper(
+            get_embedding()
+        )
         try:
             result = evaluate(
                 dataset=dataset,
                 metrics=METRICS,
-                llm=llm,
+                llm=ragas_llm,
+                embeddings=ragas_embeddings
             )
             scores = {
                 "faithfulness":      round(float(result["faithfulness"]),      4),

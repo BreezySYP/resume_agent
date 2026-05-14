@@ -22,18 +22,18 @@ def run() -> None:
         agent = build_graph().compile(checkpointer=cp)
 
         # ── Streamlit UI（默认）────────────────────────────────────────────
-        run_ui(agent)
+        # run_ui(agent)
 
         # ── 命令行测试（取消注释以使用）────────────────────────────────────
-        # reply = agent.invoke(
-        #     {
-        #         "messages":       [HumanMessage(content="帮我指定一个减肥计划")],
-        #         "reflections":    [],
-        #         "human_feedback": "",
-        #     },
-        #     config=GRAPH_CONFIG,
-        # )
-        # print(reply.get("final_answer", reply["messages"][-1].content))
+        reply = agent.invoke(
+            {
+                "messages":       [HumanMessage(content="怎么快速缓解偏头痛？")],
+                "reflections":    [],
+                "human_feedback": "",
+            },
+            config=GRAPH_CONFIG,
+        )
+        print(reply.get("final_answer", reply["messages"][-1].content))
 
 if __name__ == "__main__":
     run()
