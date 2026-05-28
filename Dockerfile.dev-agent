@@ -1,0 +1,18 @@
+FROM python:3.11.15-trixie
+
+RUN apt-get update && apt-get install -y gcc curl && rm -rf /var/lib/apt/lists/*
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+# 复制整个 monorepo（构建上下文是根目录）
+COPY pyproject.toml .
+COPY src/shared ./src/shared
+COPY src/services/dev-agent ./src/services/dev-agent
+
+# 安装 dev-agent 及其依赖（包含 shared）
+RUN uv sync --package dev-agent --no-dev
+
+WORKDIR /app/src/services/dev-agent
+EXPOSE 8003
+CMD ["uv", "run", "--package", "dev-agent", "langgraph", "dev", "--port", "8003"]

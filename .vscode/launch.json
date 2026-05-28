@@ -1,0 +1,40 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/src/stock_agent:${workspaceFolder}/src/dev_agent"
+            }
+        },
+        {
+            "name": "LangGraph: stock_agent",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "langgraph",
+            "args": ["dev", "--host", "0.0.0.0", "--port", "8002"],
+            "cwd": "${workspaceFolder}/src/stock_agent",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/src/stock_agent"
+            }
+        },
+        {
+            "name": "LangGraph: dev_agent",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "langgraph",
+            "args": ["dev", "--host", "0.0.0.0", "--port", "8003"],
+            "cwd": "${workspaceFolder}/src/dev_agent",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/src/dev_agent"
+            }
+        }
+    ]
+}

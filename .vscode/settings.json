@@ -1,3 +1,19 @@
 {
-    "python-envs.defaultEnvManager": "ms-python.python:system"
+    "python.defaultInterpreterPath": "/workspace/.venv/bin/python",
+    "python.envFile": "${workspaceFolder}/.env",
+    
+    // 关键：告诉 Pylance 额外搜索路径
+    "python.analysis.extraPaths": [
+        "/workspace/packages/shared/src",
+        "/workspace/src/dev_agent",
+        "/workspace/src/stock_agent"
+    ],
+    
+    "python.analysis.typeCheckingMode": "basic",
+    
+    // 让 Pylance 使用 uv 的环境
+    "python.terminal.activateEnvironment": true,
+    
+    // Debug 配置
+    "debugpy.debugJustMyCode": false
 }

@@ -30,5 +30,11 @@
 		"UV_PYTHON": "3.11"
 	},
 	"host.docker.internal": "host-gateway",   // Linux 需要这行（新版 Docker 已支持）
-  	"runArgs": ["--add-host=host.docker.internal:host-gateway"]
+  	"runArgs": ["--add-host=host.docker.internal:host-gateway"],
+	"settings": {
+        "python.env": {
+            "PYTHONPATH": "${containerWorkspaceFolder}"
+        },
+        "python.analysis.extraPaths": ["${containerWorkspaceFolder}"]
+    }
 }

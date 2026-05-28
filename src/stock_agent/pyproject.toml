@@ -1,0 +1,30 @@
+[project]
+name = "stock_agent"
+version = "0.1.0"
+description = "A-share stock analysis agent with MySQL + MinIO + Tavily"
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph>=1.2",
+    "langgraph-cli[inmem]>=0.1",
+    "langchain>=0.3",
+    "langchain-tavily>=0.1",
+    "langgraph-checkpoint-redis>=0.1",
+    "sqlalchemy>=2.0",
+    "pymysql>=1.1",
+    "dbutils>=3.0",
+    "boto3>=1.34",
+    "pandas>=2.0",
+    "numpy>=1.26",
+    "baostock>=0.8",
+    "akshare>=1.10",
+    "tushare>=1.2",
+    "requests>=2.31",
+    "loguru>=0.7",
+    "langsmith>=0.8.5",
+    "fastapi>=0.136.3",
+    "langserve>=0.3.3",
+]
+
+
+[tool.uv.sources]
+shared = { workspace = true }

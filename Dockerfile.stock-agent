@@ -1,0 +1,16 @@
+FROM python:3.11.15-trixie
+
+RUN apt-get update && apt-get install -y gcc curl default-libmysqlclient-dev pkg-config && rm -rf /var/lib/apt/lists/*
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+COPY pyproject.toml .
+COPY src/shared ./src/shared
+COPY src/services/stock-agent ./src/services/stock-agent
+
+RUN uv sync --package stock-agent --no-dev
+
+WORKDIR /app/src/services/stock-agent
+EXPOSE 8004
+CMD ["uv", "run", "--package", "stock-agent", "langgraph", "dev", "--port", "8004"]
