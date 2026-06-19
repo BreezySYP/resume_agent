@@ -42,9 +42,13 @@ def save_history(startdate: str = "2025-01-01", enddate: str = "2050-01-01"):
 
 
 if __name__ == "__main__":
-    save_history()
+    # save_history()
     # bs.login()
     # rs = bs.query_all_stock()
     # print(rs)
     # codes = ak.stock_info_a_code_name()
     # print(codes['code'].to_list())
+
+    help(ak)
+    print(ak.__version__)
+    ak.stock_financial_abstract(symbol="000001")

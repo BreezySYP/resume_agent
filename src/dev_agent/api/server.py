@@ -15,8 +15,16 @@ def run() -> None:
     with RedisSaver.from_conn_string(REDIS_URL) as cp:
         cp.setup()
         agent = build_graph().compile(checkpointer=cp)
+        question = "这个月股票涨的比较厉害的10支股票，列出来"
         # run_ui(agent)
-        result = agent.invoke(HumanMessage(content="这个月股票涨的比较厉害的10支股票，列出来"), config=GRAPH_CONFIG)
+        result = agent.invoke(
+            {
+                
+                "messages":      [HumanMessage(content=question)],
+                "user_question":  question ,          # entry_node 会自动提取
+            },
+            config=GRAPH_CONFIG,
+        )
         print(result)
 
 
@@ -39,5 +47,5 @@ def clear_checkpoint():
 
 
 if __name__ == "__main__":
-    # clear_checkpoint()
+    clear_checkpoint()
     run()

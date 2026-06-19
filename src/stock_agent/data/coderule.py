@@ -12,6 +12,8 @@ bj = [range(430000, 440000), range(830000, 840000), range(870000, 880000)]
 
 
 def add_prefix(code, upper=False, add_dot=False):
+    if code[:2].lower() in ["sz", "sh", "bj"]:
+        return code
     num_part = int(code)
     _sz = ("SZ" if upper else "sz") + ("." if add_dot else "")
     _sh = ("SH" if upper else "sh") + ("." if add_dot else "")

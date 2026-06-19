@@ -9,15 +9,16 @@ from graph.nodes import (
 def build_graph() -> StateGraph:
     g = StateGraph(AgentState)
 
-    g.add_node("Entry",       entry_node)
+    # g.add_node("Entry",       entry_node)
     g.add_node("Supervisor",  supervisor_node)     
     g.add_node("Capitalist",  capitalist_node)
     g.add_node("Generalist",  generalist_node)
     g.add_node("Reflection",  reflection_node)
     g.add_node("Final_Answer", final_answer_node)
 
-    g.add_edge(START, "Entry")
-    g.add_edge("Entry", "Supervisor")
+    # g.add_edge(START, "Entry")
+    # g.add_edge("Entry", "Supervisor")
+    g.add_edge(START, "Supervisor")
 
     g.add_conditional_edges(
         "Supervisor",
@@ -32,6 +33,6 @@ def build_graph() -> StateGraph:
     g.add_edge("Generalist",  "Reflection")
     g.add_edge("Capitalist",  "Reflection")
     g.add_edge("Reflection",  "Supervisor")
-    g.add_edge("Reflection",  "Final_Answer")
+    # g.add_edge("Reflection",  "Final_Answer")
     g.add_edge("Final_Answer", END)
     return g

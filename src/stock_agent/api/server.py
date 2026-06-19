@@ -35,14 +35,12 @@ with RedisSaver.from_conn_string(REDIS_URL) as checkpointer:
     checkpointer.setup()
     graph = build_graph().compile()
 
-# from shared.configs.settings import REDIS_URL, GRAPH_CONFIG
-# if __name__ == "__main__":
-#     _graph   = build_graph().compile()
-#     question = sys.argv[1] if len(sys.argv) > 1 else "这个月涨幅比例最高的10支股票"
-#     result   = _graph.invoke({
-#         "messages":        [HumanMessage(content=question)],
-#         "user_question":   question,
-#         "retry_count":     0,
-#         "review_feedback": None,
-#     })
-#     print(result["final_answer"])
+from shared.configs.settings import REDIS_URL, GRAPH_CONFIG
+if __name__ == "__main__":
+    _graph   = build_graph().compile()
+    question = sys.argv[1] if len(sys.argv) > 1 else "这个月涨幅比例最高的10支股票"
+    result   = _graph.invoke({
+        "messages":        [HumanMessage(content=question)],
+        "user_question":   question
+    })
+    print(result["final_answer"])

@@ -11,6 +11,8 @@ dependencies = [
     "opentelemetry-exporter-otlp-proto-grpc>=1.20",
     "loguru>=0.7",
     "langchain-redis>=0.2.5",
+    "loki-logger-handler>=1.1.2",
+    "langchain-deepseek>=1.1.0",
 ]
 
 [build-system]
