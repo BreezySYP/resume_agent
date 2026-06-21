@@ -1,0 +1,25 @@
+[project]
+name = "stock_etl"
+version = "0.1.0"
+description = "A-share stock data ETL: fetch -> compute factors -> save to MySQL / Qdrant"
+requires-python = ">=3.11"
+dependencies = [
+    "shared",
+    "sqlalchemy>=2.0",
+    "pymysql>=1.1",
+    "dbutils>=3.0",
+    "pandas>=2.0",
+    "numpy>=1.26",
+    "baostock>=0.8",
+    "akshare>=1.10",
+    "requests>=2.31",
+    "loguru>=0.7",
+    "redis>=5.0",
+    "qdrant-client>=1.18.0",
+    "fastembed>=0.8.0",
+    "scipy>=1.11",
+    "matplotlib>=3.10.9",
+]
+
+[tool.uv.sources]
+shared = { workspace = true }
