@@ -1,24 +1,11 @@
 """core/minio_file.py — MinIO Skill 文件管理"""
-import os
 from functools import lru_cache
+
 import boto3
 from loguru import logger
-from shared.configs.settings import MINIO_URL, MINIO_USER, MINIO_PASSWORD, MINIO_BUCKET
+from shared.configs.settings import MINIO_BUCKET, MINIO_PASSWORD, MINIO_URL, MINIO_USER
 
-_s3 = boto3.client(
-    "s3",
-    endpoint_url=MINIO_URL,
-    aws_access_key_id=MINIO_USER,
-    aws_secret_access_key=MINIO_PASSWORD,
-)
-
-
-def ensure_bucket():
-    try:
-        _s3.create_bucket(Bucket=MINIO_BUCKET)
-        logger.info("Created bucket: {}", MINIO_BUCKET)
-    except Exception:
-        pass
+_s3 = boto3.client("s3", endpoint_url=MINIO_URL, aws_access_key_id=MINIO_USER, aws_secret_access_key=MINIO_PASSWORD)
 
 
 @lru_cache(maxsize=50)

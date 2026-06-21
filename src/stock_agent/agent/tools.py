@@ -1,17 +1,17 @@
 """agent/tools.py — Stock Agent 工具集"""
 import datetime
-import os
+
+import pandas as pd
+from core.minio_file import list_skills as _list_skills
+from core.minio_file import load_skill as _load_skill
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
-from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_tavily import TavilySearch
 from loguru import logger
-import pandas as pd
-from core.db import get_schema, get_tables, execute_query, engine
-from core.minio_file import load_skill as _load_skill, list_skills as _list_skills
 from service import search_similar
-# from shared.models.ollama import get_llm, get_llm_sql
+from shared.db.mysql import engine, execute_query, get_schema, get_tables
 from shared.models.deepseek import get_deepseek
-from data.text_helper import build_stock_profile_text, build_stock_news_text
+from shared.text.stock_text import build_stock_news_text, build_stock_profile_text
 
 
 def _clean_sql(raw: str) -> str:
@@ -42,12 +42,11 @@ def query_database(question: str) -> str:
     """
     schemas = get_schema()
     tables = get_tables()
-    samples = {t: execute_query(f"SELECT * FROM `{t}` LIMIT 1")
-               for t in tables}
+    samples = {t: execute_query(f"SELECT * FROM `{t}` LIMIT 1") for t in tables}
 
     context = (
-        f"数据库结构：\n" + "\n".join(schemas) + "\n\n"
-        f"样本数据：\n" + "\n".join(f"{t}: {s}" for t, s in samples.items())
+        "数据库结构：\n" + "\n".join(schemas) + "\n\n"
+        "样本数据：\n" + "\n".join(f"{t}: {s}" for t, s in samples.items())
     )
 
     sql_agent_prompt = (
@@ -64,15 +63,10 @@ def query_database(question: str) -> str:
     )
 
     sql_agent = get_deepseek()
-    # 生成初始 SQL
-    resp = sql_agent.invoke([
-        SystemMessage(content=sql_agent_prompt),
-        HumanMessage(content=question),
-    ])
+    resp = sql_agent.invoke([SystemMessage(content=sql_agent_prompt), HumanMessage(content=question)])
     sql = _clean_sql(resp.content)
     logger.debug("Generated SQL: {}", sql)
 
-    # 自动纠错循环
     for attempt in range(3):
         try:
             rows = execute_query(sql)
@@ -85,10 +79,7 @@ def query_database(question: str) -> str:
         except Exception as e:
             logger.warning("Attempt {} failed: {}", attempt + 1, e)
             if attempt < 2:
-                fix_resp = sql_agent.invoke([
-                    SystemMessage(
-                        content=fix_prompt_tpl.format(sql=sql, error=e))
-                ])
+                fix_resp = sql_agent.invoke([SystemMessage(content=fix_prompt_tpl.format(sql=sql, error=e))])
                 sql = _clean_sql(fix_resp.content)
                 logger.debug("Fixed SQL: {}", sql)
 
@@ -127,13 +118,10 @@ def search_business_breakdown(stock_names: str):
 
 @tool
 def search_stock_profile(query: str):
-    """根据用户的提问中提取出领域，作为query查找相对应的股票
-    """
-    return search_similar.search_v3(query,
-                                    "stock_profile_hybrid",
-                                    "stock_profile",
-                                    build_stock_profile_text,
-                                    20).drop(columns=["scope"]).to_dict(orient="records")
+    """根据用户的提问中提取出领域，作为query查找相对应的股票"""
+    return search_similar.search_with_rerank(
+        query, "stock_profile_hybrid", "stock_profile", build_stock_profile_text, 20
+    ).drop(columns=["scope"]).to_dict(orient="records")
 
 
 @tool
@@ -144,107 +132,35 @@ def search_news(stock_names: str):
     输出：
         返回关于这个题材或领域里相关的新闻或者所设计的企业的公告
     """
-    return search_similar.search_v3(stock_names, 
-                                    "stock_news_hybrid", 
-                                    "stock_news", 
-                                    build_stock_news_text, 20).to_dict(orient="records")
-
-
-# @tool
-def stock_financial_features(codes: list[str]):
-    """
-    获取指定股票的财务分析数据，包括营收、净利润、ROE、毛利率等关键指标。
-
-    Args:
-        codes (list[str]): 股票代码，必须带市场前缀（如 sh601012、sz002837）
-
-    Returns:
-        dict: 包含财务指标的字典
-    """
-
-    sql = f"SELECT * FROM mydb.financial_feature code in ({str(codes)[1:-1]});"
-    df = pd.read_sql(sql, con=engine.connect())
-    return df.to_dict(orient="records")
+    return search_similar.search_with_rerank(
+        stock_names, "stock_news_hybrid", "stock_news", build_stock_news_text, 20
+    ).to_dict(orient="records")
 
 
 @tool
 def stock_financial_analysis(code: str):
-    """
-    输入的code 格式为 sh601083
-    """
-
-    sql = """SELECT * FROM mydb.financial_factor
-    where total_financial_rank is not null and code = 
-    order by total_financial_rank asc limit 1000;"""
+    """输入的code 格式为 sh601083"""
+    sql = """SELECT * FROM financial_factor
+    WHERE total_financial_rank IS NOT NULL
+    ORDER BY total_financial_rank ASC LIMIT 1000;"""
     df = pd.read_sql(sql, con=engine.connect())
     return df.to_dict(orient="records")
+
 
 @tool
 def stock_technical_analysis(query: str):
-    """
-    get top 1000 stock by technical indicators. caclulated by
-     g["ma20_ratio"] = (
-            g["close"] /
-            g["close"].rolling(20).mean()
-        )
-
-        g["ma60_ratio"] = (
-            g["close"] /
-            g["close"].rolling(60).mean()
-        )
-
-        g["ma120_ratio"] = (
-            g["close"] /
-            g["close"].rolling(120).mean()
-        )
-
-        # ---------------------------
-        # momentum
-        # ---------------------------
-
-        g["rsi14"] = rsi(g["close"], 14)
-
-        g["mom20"] = momentum(g["close"], 20)
-
-        g["macd_hist"] = macd(g["close"])
-
-        # ---------------------------
-        # volume
-        # ---------------------------
-
-        g["obv"] = obv(
-            g["close"],
-            g["volume"]
-        )
-
-        g["mfi14"] = mfi(
-            g["high"],
-            g["low"],
-            g["close"],
-            g["volume"],
-            14
-        )
-
-    """
-
-    sql = """SELECT * FROM mydb.technical_factor
-where date is not null and date > '2025-01-01' and total_technical_score is not null
- order by total_technical_score desc limit 1000;"""
+    """获取近期技术面综合得分排名前 1000 的股票，得分由趋势/动量/量能因子加权计算（详见 stock_etl.factors.technical）"""
+    sql = """SELECT * FROM technical_factor
+    WHERE date IS NOT NULL AND date > '2025-01-01' AND total_technical_score IS NOT NULL
+    ORDER BY total_technical_score DESC LIMIT 1000;"""
     df = pd.read_sql(sql, con=engine.connect())
     return df.to_dict(orient="records")
 
 
-web_search = TavilySearch(
-    max_results=5, search_depth="advanced", include_answer=True)
+web_search = TavilySearch(max_results=5, search_depth="advanced", include_answer=True)
 
 DB_TOOLS = [get_db_schema, execute_sql, query_database]
 SEARCH_TOOLS = [web_search]
 SKILL_TOOLS = [load_skill, list_skills, time_tool]
-similar_stock_info_tools = [search_business_breakdown, search_stock_profile,
-                            search_news, stock_financial_analysis, stock_technical_analysis]
-ALL_TOOLS = DB_TOOLS + SEARCH_TOOLS + SKILL_TOOLS + similar_stock_info_tools
-
-
-if __name__ == "__main__":
-    out = stock_financial_features(["sh601012","sz002837"])
-    print(out)
+SIMILAR_STOCK_INFO_TOOLS = [search_business_breakdown, search_stock_profile, search_news, stock_financial_analysis, stock_technical_analysis]
+ALL_TOOLS = DB_TOOLS + SEARCH_TOOLS + SKILL_TOOLS + SIMILAR_STOCK_INFO_TOOLS
