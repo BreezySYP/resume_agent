@@ -24,6 +24,9 @@ MINIO_USER     = os.getenv("MINIO_ROOT_USER",     "admin")
 MINIO_PASSWORD = os.getenv("MINIO_ROOT_PASSWORD", "changeit")
 MINIO_BUCKET   = os.getenv("MINIO_BUCKET",        "skills")
 
+QDRANT_URL  = os.getenv("QDRANT_URL", "http://host.docker.internal:6333")
+CUDA_RERANK_URL = os.getenv("CUDA_RERANK_URL", "http://host.docker.internal:8000/api/v1/rerank")
+
 GRAFANA_URL = os.getenv("GRAFANA_URL", "")
 
 THREAD_ID    = os.getenv("THREAD_ID", "agent_001")

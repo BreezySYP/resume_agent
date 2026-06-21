@@ -13,6 +13,12 @@ dependencies = [
     "langchain-redis>=0.2.5",
     "loki-logger-handler>=1.1.2",
     "langchain-deepseek>=1.1.0",
+    "pymysql>=1.1",
+    "sqlalchemy>=2.0",
+    "dbutils>=3.0",
+    "redis>=5.0",
+    "qdrant-client>=1.18.0",
+    "pandas>=2.0",
 ]
 
 [build-system]
