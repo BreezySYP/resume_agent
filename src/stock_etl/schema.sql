@@ -256,9 +256,11 @@ CREATE TABLE stock_business_breakdown (
     gross_margin DOUBLE
 );
 
-
-CREATE TABLE history_job (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    last_date DATE
+-- ETL pipeline 断点续跑表：每个 step 一行，记录下次应从哪个 start_date / start_code 继续
+CREATE TABLE IF NOT EXISTS etl_checkpoint (
+    step                VARCHAR(50) PRIMARY KEY,
+    start_date          DATE,
+    start_code          VARCHAR(20),
+    last_completed_date DATE,
+    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
-

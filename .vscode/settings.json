@@ -6,7 +6,8 @@
     "python.analysis.extraPaths": [
         "/workspace/packages/shared/src",
         "/workspace/src/dev_agent",
-        "/workspace/src/stock_agent"
+        "/workspace/src/stock_agent",
+        "/workspace/src/stock_etl"
     ],
     
     "python.analysis.typeCheckingMode": "basic",

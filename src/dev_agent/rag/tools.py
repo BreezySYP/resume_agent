@@ -7,7 +7,7 @@ from langchain_tavily import TavilySearch
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from shared.configs.settings import GRAPH_CONFIG
 from shared.configs.tracing import tracer
-from shared.models.ollama import get_llm
+from shared.models.ollama_models import get_llm
 from rag.vector_store import get_vector_store
 from langchain_core.messages import HumanMessage
 

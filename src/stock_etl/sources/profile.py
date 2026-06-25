@@ -1,4 +1,4 @@
-"""sources/profile.py — 个股主营业务简介 + 主营构成抓取（东方财富 / 同花顺）"""
+"""sources/profile.py — 个股主营业务简介 + 主营构成抓取"""
 import random
 import time
 from datetime import datetime
@@ -24,7 +24,6 @@ BREAKDOWN_RENAME = {
 
 
 def stock_zygc_em(symbol: str = "SH688041") -> pd.DataFrame:
-    """东方财富网-个股-主营构成"""
     r = requests.get("https://emweb.securities.eastmoney.com/PC_HSF10/BusinessAnalysis/PageAjax", params={"code": symbol})
     data_json = r.json()
     if data_json.get("status", 0) < 0:
@@ -41,16 +40,20 @@ def stock_zygc_em(symbol: str = "SH688041") -> pd.DataFrame:
     return df
 
 
-def fetch_profiles_and_breakdowns(min_code: str = "000000") -> tuple[pd.DataFrame, pd.DataFrame]:
-    """抓取全市场（或起始代码之后）的主营业务简介 + 主营构成"""
+def fetch_profiles_and_breakdowns(min_code: str = "000000", on_batch=None, batch_size: int = 50) -> None:
+    """逐批抓取主营业务简介 + 主营构成。每 batch_size 只股票后调用 on_batch(profile_df, breakdown_df, last_code)：
+    调用方负责在 on_batch 里先存 DB 再更新 checkpoint。
+    """
     codes = [(c["code"], c["name"]) for c in ak.stock_info_a_code_name().to_dict("records") if c["code"] >= min_code]
-    profiles, breakdowns = [], []
+
+    profile_frames, breakdown_frames = [], []
+    last_code = None
     for code, name in codes:
         df1 = ak.stock_zyjs_ths(code)
-        profile = df1[["股票代码", "主营业务", "经营范围"]].rename(columns={"股票代码": "code", "主营业务": "business", "经营范围": "scope"})
-        profile["update_time"] = datetime.now()
-        profile["name"] = name
-        profiles.append(profile)
+        p = df1[["股票代码", "主营业务", "经营范围"]].rename(columns={"股票代码": "code", "主营业务": "business", "经营范围": "scope"})
+        p["update_time"] = datetime.now()
+        p["name"] = name
+        profile_frames.append(p)
         logger.info("fetched profile for {} {}", code, name)
         time.sleep(random.uniform(1, 2))
 
@@ -58,11 +61,28 @@ def fetch_profiles_and_breakdowns(min_code: str = "000000") -> tuple[pd.DataFram
         if zygc.empty:
             logger.warning("no zygc for {} {}", code, name)
         else:
-            breakdown = zygc.rename(columns=BREAKDOWN_RENAME)
-            breakdown["name"] = name
-            breakdowns.append(breakdown)
+            b = zygc.rename(columns=BREAKDOWN_RENAME)
+            b["name"] = name
+            breakdown_frames.append(b)
+
+        last_code = code
+
+        if on_batch and len(profile_frames) >= batch_size and last_code:
+            on_batch(
+                pd.concat(profile_frames, ignore_index=True),
+                pd.concat(breakdown_frames, ignore_index=True) if breakdown_frames else pd.DataFrame(),
+                last_code,
+            )
+            profile_frames, breakdown_frames = [], []
+
         time.sleep(random.uniform(1, 2))
 
-    profile_df = pd.concat(profiles, ignore_index=True) if profiles else pd.DataFrame()
-    breakdown_df = pd.concat(breakdowns, ignore_index=True) if breakdowns else pd.DataFrame()
-    return profile_df, breakdown_df
+    if on_batch and profile_frames and last_code:
+        on_batch(
+            pd.concat(profile_frames, ignore_index=True),
+            pd.concat(breakdown_frames, ignore_index=True) if breakdown_frames else pd.DataFrame(),
+            last_code,
+        )
+
+# if __name__ == "__main__":
+#     # fetch_profiles_and_breakdowns()

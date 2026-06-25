@@ -6,7 +6,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from shared.configs.settings import GRAPH_CONFIG
 from shared.configs.tracing import tracer
-from shared.models.ollama import get_llm
+from shared.models.ollama_models import get_llm
 from agents.base import build_generalist
 from shared.agents.agent_state import AgentState
 

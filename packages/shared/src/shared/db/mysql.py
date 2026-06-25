@@ -66,7 +66,7 @@ def get_dataframe(sql: str, params: dict | None = None) -> pd.DataFrame:
 def insert_ignore(table, conn, keys, data_iter):
     """pandas to_sql method：重复则跳过"""
     data = [dict(zip(keys, row)) for row in data_iter]
-    conn.execute(mysql_insert(table.table).prefix_with("IGNORE"), data)
+    conn.execute(mysql_insert(table.table).prefix_with("IGNORE"),   )
 
 
 def save_dataframe(df: pd.DataFrame, table: str, if_exists: str = "append", chunksize: int = 5000, ignore_duplicates: bool = False) -> int:
@@ -75,3 +75,8 @@ def save_dataframe(df: pd.DataFrame, table: str, if_exists: str = "append", chun
     df.to_sql(table, engine, if_exists=if_exists, index=False, chunksize=chunksize, method=method)
     logger.info("✅ saved {} rows to `{}` (if_exists={})", len(df), table, if_exists)
     return len(df)
+
+
+
+
+

@@ -1,4 +1,4 @@
-"""sources/financial_statement.py — 财务报表抓取（akshare 抽象财务指标，宽表转长表）"""
+"""sources/financial_statement.py — 财务报表抓取"""
 import random
 import time
 
@@ -17,9 +17,8 @@ FINANCIAL_METRIC_MAP = {
 
 
 def transform_wide(df: pd.DataFrame, code: str) -> pd.DataFrame:
-    """akshare 返回的宽表（指标 x 日期）转为长表（code, report_date, metric...）"""
     date_cols = [c for c in df.columns if c not in ("选项", "指标")]
-    result: dict[tuple[str, str], dict] = {}
+    result: dict[tuple, dict] = {}
     for _, row in df.iterrows():
         metric = row["指标"]
         if metric not in FINANCIAL_METRIC_MAP:
@@ -33,12 +32,15 @@ def transform_wide(df: pd.DataFrame, code: str) -> pd.DataFrame:
     return pd.DataFrame([{"code": code, "report_date": date, **values} for (code, date), values in result.items()])
 
 
-def fetch_financial_statements(start_code: int = 0, end_code: int = 1000000) -> pd.DataFrame:
-    """逐只股票抓取财务摘要并转换为标准长表，附带限流和容错"""
+def fetch_financial_statements(start_code: int = 0, end_code: int = 1000000, on_batch=None, batch_size: int = 50) -> None:
+    """逐批抓取财务摘要。每 batch_size 只股票后调用 on_batch(df, last_code)：
+    调用方负责在 on_batch 里先存 DB 再更新 checkpoint。
+    """
     codes = [(r["code"], r["name"]) for r in ak.stock_info_a_code_name().to_dict("records")]
     codes = [(add_prefix(c[0]), c[1]) for c in codes if start_code <= int(c[0]) <= end_code]
 
     frames = []
+    last_code = None
     for code, name in codes:
         try:
             raw = ak.stock_financial_abstract(symbol=code)
@@ -49,6 +51,14 @@ def fetch_financial_statements(start_code: int = 0, end_code: int = 1000000) -> 
         df = transform_wide(raw, code)
         df["name"] = name
         frames.append(df)
+        last_code = code
         logger.info("fetched {} {}", code, name)
+
+        if on_batch and len(frames) >= batch_size and last_code:
+            on_batch(pd.concat(frames, ignore_index=True), last_code)
+            frames = []
+
         time.sleep(random.uniform(2, 3))
-    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+    if on_batch and frames and last_code:
+        on_batch(pd.concat(frames, ignore_index=True), last_code)

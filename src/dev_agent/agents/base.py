@@ -1,7 +1,7 @@
 """agents/base.py — Researcher / Coder / Reviewer 工厂"""
 from langchain.agents import create_agent
 from langchain_core.messages import SystemMessage
-from shared.models.ollama import get_llm
+from shared.models.ollama_models import get_llm
 from rag.tools import researcher_tools, coder_tools, reviewer_tools
 
 

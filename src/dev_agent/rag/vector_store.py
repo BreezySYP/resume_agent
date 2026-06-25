@@ -2,7 +2,7 @@
 from functools import lru_cache
 from langchain_redis import RedisVectorStore
 from shared.configs.settings import REDIS_URL, VS_INDEX_NAME
-from shared.models.ollama import get_embedding
+from shared.models.ollama_models import get_embedding
 
 
 @lru_cache(maxsize=1)

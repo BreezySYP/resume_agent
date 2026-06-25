@@ -5,7 +5,7 @@ from typing import List, Dict, Optional
 
 from langchain_redis import RedisVectorStore
 
-from shared.models.ollama import get_embedding
+from shared.models.ollama_models import get_embedding
 from shared.configs.settings import REDIS_URL
 
 logger = logging.getLogger(__name__)

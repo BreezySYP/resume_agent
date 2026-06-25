@@ -39,3 +39,24 @@ uv run python -m pipeline --steps all
 
 - 股票代码规则 (`add_prefix`/`remove_prefix`)、MySQL 连接池、Qdrant client、Redis 缓存装饰器、
   文本拼装函数等被 `stock_agent` 和 `stock_etl` 共用的代码统一放在 `packages/shared`。
+
+## 断点续跑（etl_checkpoint）
+
+`schema.sql` 新增了 `etl_checkpoint` 表，按 `step` 记录 `start_date` / `start_code`：
+
+```sql
+CREATE TABLE etl_checkpoint (
+    step VARCHAR(50) PRIMARY KEY,
+    start_date DATE,
+    start_code VARCHAR(20),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+逐代码扫描类的 step（`history` `financial_statement` `profile` `news`）会在每只股票处理完后写入
+`start_code`；进程中途崩溃后重新运行同一 step，会自动从断点继续，不用每次从代码 `000000` 重头跑。
+
+- `history`：成功跑完一轮后会把 `start_date` 推进到本次的 `end_date`，下次默认从这里继续拉增量。
+- `financial_statement` / `profile` / `news`：跑完一轮全市场后会清空断点，下次重新从头开始全量刷新。
+
+读写封装在 `storage/checkpoint.py`：`get_checkpoint(step)` / `save_checkpoint(step, ...)` / `clear_checkpoint(step)`。

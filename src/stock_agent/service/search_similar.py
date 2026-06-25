@@ -6,7 +6,7 @@ from qdrant_client import models
 from qdrant_client.models import Prefetch, SparseVector
 from shared.db.mysql import engine
 from shared.db.qdrant import get_qdrant_client
-from shared.models.ollama import get_embedding
+from shared.models.ollama_models import get_embedding
 
 client = get_qdrant_client()
 model = get_embedding()

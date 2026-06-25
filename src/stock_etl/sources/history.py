@@ -15,7 +15,6 @@ def _random_var(n: int = 13) -> str:
 
 
 def get_history(symbol: str, start: str, end: str) -> pd.DataFrame:
-    """symbol: sh600519, start/end: 1988-01-01"""
     url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?_var=&param={symbol},day,{start},{end},640,qfq"
     data_json = requests.get(url).json()
     symbol_node = data_json["data"][symbol]
@@ -29,12 +28,10 @@ def get_history(symbol: str, start: str, end: str) -> pd.DataFrame:
 
 
 def get_all_codes() -> pd.DataFrame:
-    """全市场股票代码 + 名称"""
     return ak.stock_info_a_code_name()
 
 
 def top_hs300(date: str | None = None) -> pd.DataFrame:
-    """沪深300成分股"""
     date = date or time.strftime("%Y-%m-%d")
     bs.login()
     rs = bs.query_hs300_stocks(date=date)
@@ -44,23 +41,35 @@ def top_hs300(date: str | None = None) -> pd.DataFrame:
     return df[["code", "name"]]
 
 
-def fetch_all_history(start_date: str = "2025-01-01", end_date: str = "2050-01-01") -> pd.DataFrame:
-    """全市场历史 K 线（逐只股票请求，附带限流）"""
+def fetch_all_history(start_date: str, end_date: str, min_code: str = "000000", on_batch=None, batch_size: int = 50) -> None:
+    """全市场历史 K 线逐批抓取。
+    每 batch_size 只股票处理完后调用 on_batch(df, last_code)：
+    调用方负责在 on_batch 里先存 DB 再更新 checkpoint，保证数据不丢失。
+    """
     from shared.code_rule import add_prefix
 
-    codes = [(add_prefix(r["code"]), r["name"]) for r in get_all_codes().to_dict("records")]
-    logger.info("共 {} 支股票待拉取", len(codes))
+    codes = [(add_prefix(r["code"]), r["name"]) for r in get_all_codes().to_dict("records") if r["code"] >= min_code]
+    logger.info("共 {} 支股票待拉取（min_code={}）", len(codes), min_code)
+
     frames = []
+    last_code = None
     for code, name in codes:
         try:
             df = get_history(code, start_date, end_date)
             df["name"] = name
             df["price_change"] = (df["close"] - df["close"].shift(1)).round(2)
-            float_cols = df.select_dtypes(include="float").columns
-            df[float_cols] = df[float_cols].round(2)
+            df[df.select_dtypes(include="float").columns] = df.select_dtypes(include="float").round(2)
             frames.append(df)
+            last_code = code
             logger.info("✅ {} {} {} 条", code, name, len(df))
         except Exception as e:
             logger.error("❌ {} {} 失败: {}", code, name, e)
+
+        if on_batch and len(frames) >= batch_size and last_code:
+            on_batch(pd.concat(frames, ignore_index=True), last_code)
+            frames = []
+
         time.sleep(1)
-    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+    if on_batch and frames and last_code:
+        on_batch(pd.concat(frames, ignore_index=True), last_code)

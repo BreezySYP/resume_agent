@@ -10,7 +10,7 @@ from ragas.metrics import faithfulness, answer_relevancy
 from langsmith import Client as LangSmithClient
 from shared.configs.settings import LANGSMITH_PROJECT
 from shared.configs.tracing import tracer
-from shared.models.ollama import get_embedding
+from shared.models.ollama_models import get_embedding
 
 _ls_client = LangSmithClient()
 METRICS = [faithfulness, answer_relevancy]

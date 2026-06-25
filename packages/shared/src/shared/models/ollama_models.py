@@ -1,5 +1,6 @@
 """shared/models/ollama.py — LLM + Embedding 单例，所有服务共用"""
 from functools import lru_cache
+from typing import List
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_groq import ChatGroq
 from shared.configs.settings import OLLAMA_URL, LLM_MODEL, LLM_SQL, EMBED_MODEL, GROQ_API_KEY
@@ -34,11 +35,37 @@ def get_fast_llm():
 @lru_cache(maxsize=1)
 def get_embedding() -> OllamaEmbeddings:
     print("preparing embeddings...")
-    emb = OllamaEmbeddings(model=EMBED_MODEL, base_url=OLLAMA_URL)
+    emb = OllamaEmbeddings(model=EMBED_MODEL, num_gpu=2, base_url=OLLAMA_URL)
     print("✅ embeddings ready")
     return emb
 
-def get_embedding_dim(model=get_embedding()):
-    vec = model.embed_query("test")
-    return len(vec)
+def get_embedding_dim():
+    vec = get_ollama_embedding()(["test"])
+    return len(vec[0])
 
+
+    
+@lru_cache(maxsize=1)
+def get_ollama_embedding():
+    import ollama
+    print(f"preparing embeddings with native ollama (bge-m3) @ {OLLAMA_URL}...")
+    
+    # 配置 client
+    client = ollama.Client(host=OLLAMA_URL)
+    
+    def embed_documents(texts: List[str]):
+        
+        response = client.embed(
+            model=EMBED_MODEL,   # "bge-m3"
+            input=texts
+        )
+        return response['embeddings']
+    
+    print("✅ ollama native client ready")
+    return embed_documents
+    
+
+
+if __name__ == "__main__":
+    # print(get_embedding_dim()) 
+    print(len(get_ollama_embedding()(["Hello world", "This is a test"])[0])) 
