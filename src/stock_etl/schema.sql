@@ -262,5 +262,6 @@ CREATE TABLE IF NOT EXISTS etl_checkpoint (
     start_date          DATE,
     start_code          VARCHAR(20),
     last_completed_date DATE,
+    last_completed_at   TIMESTAMP,
     updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
