@@ -1,13 +1,16 @@
 from functools import lru_cache
 
 from langchain_deepseek import ChatDeepSeek
+import os
+
+api_key = os.getenv("DEEP_SEEK_KEY")
 
 @lru_cache(maxsize=1)
 def get_deepseek() -> ChatDeepSeek:
 
     return ChatDeepSeek(
         model="deepseek-v4-flash",
-        api_key="sk-3422df85f94840eca12cecefb93933ae"
+        api_key=api_key
     )
 
 
