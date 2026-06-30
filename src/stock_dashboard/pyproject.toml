@@ -1,0 +1,17 @@
+[project]
+name = "stock_dashboard"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "sqlalchemy>=2.0",
+    "pymysql>=1.1",
+    "pydantic>=2.0",
+    "python-dotenv>=1.0",
+    "loguru>=0.7",
+    "sse-starlette>=1.8",
+]
+
+[tool.uv.sources]
+shared = { workspace = true }
