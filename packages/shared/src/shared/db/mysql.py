@@ -6,6 +6,7 @@ from loguru import logger
 from sqlalchemy import create_engine, text
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from shared.configs.settings import MYSQL_DB, MYSQL_HOST, MYSQL_PASSWORD, MYSQL_PORT, MYSQL_ROOT_USER
+from sqlalchemy.orm import sessionmaker, Session
 
 logger.info("Connecting to MySQL: {}@{}:{}/{}", MYSQL_ROOT_USER, MYSQL_HOST, MYSQL_PORT, MYSQL_DB)
 
@@ -23,11 +24,26 @@ engine = create_engine(
     },
 )
 
+logger.info("connected to db")
+
 pool = PooledDB(
     creator=pymysql, maxconnections=6, mincached=2, maxcached=5, blocking=True,
     host=MYSQL_HOST, port=MYSQL_PORT, user=MYSQL_ROOT_USER,
     password=MYSQL_PASSWORD, database=MYSQL_DB, charset="utf8mb4",
 )
+
+logger.info("db pool ready")
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def get_db():
+    """FastAPI dependency"""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 def get_connection():
@@ -66,14 +82,16 @@ def get_dataframe(sql: str, params: dict | None = None) -> pd.DataFrame:
 def insert_ignore(table, conn, keys, data_iter):
     """pandas to_sql method：重复则跳过"""
     data = [dict(zip(keys, row)) for row in data_iter]
-    conn.execute(mysql_insert(table.table).prefix_with("IGNORE"),   )
+    stmt = mysql_insert(table.table).prefix_with("IGNORE")
+    result = conn.execute(stmt, data)
+    return result.rowcount
 
 
 def save_dataframe(df: pd.DataFrame, table: str, if_exists: str = "append", chunksize: int = 5000, ignore_duplicates: bool = False) -> int:
     """统一的 DataFrame -> MySQL 写入入口，ETL job 应优先使用此方法而非直接调用 to_sql"""
     method = insert_ignore if ignore_duplicates else "multi"
-    df.to_sql(table, engine, if_exists=if_exists, index=False, chunksize=chunksize, method=method)
-    logger.info("✅ saved {} rows to `{}` (if_exists={})", len(df), table, if_exists)
+    result = df.to_sql(table, engine, if_exists=if_exists, index=False, chunksize=chunksize, method=method)
+    logger.info("✅ saved {} rows to `{}` (if_exists={})", result, table, if_exists)
     return len(df)
 
 

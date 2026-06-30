@@ -37,7 +37,7 @@ def is_completed_today(step: str) -> bool:
     # 如果 last_completed_at 是今天下午4点之后，则认为今天已经完成
     if cp.last_completed_at is not None:
         now = datetime.datetime.now()
-        if now.hour - cp.last_completed_at.hour < 24 and ((cp.last_completed_at.hour >= 16 and now.hour >= 16) or (cp.last_completed_at.hour < 16 and now.hour < 16)):
+        if now.day - cp.last_completed_at.day < 1 and ((cp.last_completed_at.hour >= 16 and now.hour >= 16) or (cp.last_completed_at.hour < 16 and now.hour < 16)):
             return True
     return False
 

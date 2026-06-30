@@ -10,7 +10,7 @@
         "/workspace/src/stock_etl"
     ],
     
-    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.typeCheckingMode": "off",
     
     // 让 Pylance 使用 uv 的环境
     "python.terminal.activateEnvironment": true,

@@ -36,24 +36,17 @@ def today() -> str:
 
 def run_history_step(start_date: str | None = None, end_date: str | None = None) -> None:
     cp = checkpoint.get_checkpoint("history")
-    if start_date:
-        effective_start = start_date
-    elif cp.start_code:
-        effective_start = cp.start_date        # 中断续跑，窗口不变
-    elif cp.start_date:
-        effective_start = next_trading_day(cp.start_date)  # 正常增量
-    else:
-        effective_start = DEFAULT_START_DATE
-    effective_end = end_date or today()
+    effective_start = cp.last_completed_date if cp.last_completed_date else DEFAULT_START_DATE
+    effective_end =  end_date or today()
     resume_code = cp.start_code or "000000"
     logger.info("history: start={}, end={}, resume_code={}", effective_start, effective_end, resume_code)
 
     def on_batch(df: pd.DataFrame, last_code: str) -> None:
         mysql_writer.save_history(df)
-        checkpoint.save_checkpoint("history", start_date=effective_start, start_code=last_code)
+        checkpoint.save_checkpoint("history", start_code=last_code)
 
-    history.fetch_all_history(effective_start, effective_end, min_code=resume_code, on_batch=on_batch)
-    checkpoint.save_checkpoint("history", start_date=effective_end)
+    history.fetch_all_history(effective_start, next_trading_day(effective_end), min_code=resume_code, on_batch=on_batch)
+    # checkpoint.save_checkpoint("history", start_date=effective_end)
 
 
 # ── technical ──────────────────────────────────────────────────────────────────
@@ -61,31 +54,27 @@ def run_history_step(start_date: str | None = None, end_date: str | None = None)
 def run_technical_step() -> None:
     cp = checkpoint.get_checkpoint("technical")
     new_start = cp.last_completed_date or DEFAULT_START_DATE
-    logger.info("technical: 增量计算 date > {}", new_start)
+    start_code = '000001' or cp.start_code
+    logger.info("technical: 增量计算 date > {} code > {}", new_start, start_code)
 
-    # 取所有股票最近 TECHNICAL_WINDOW_DAYS 天数据（保证滚动窗口正确），只对有新数据的股票计算
-    sql = f"""
-        SELECT code, name, date, open, high, low, close, volume FROM history
-        WHERE code IN (
-            SELECT DISTINCT code FROM history WHERE date > {new_start}
-        )
-        AND date >= DATE_SUB({new_start}, INTERVAL {TECHNICAL_WINDOW_DAYS} DAY)
-        ORDER BY code, date
-    """
-    df = load_df(sql, "history")
-    if df.empty:
-        logger.info("technical: 无新数据，跳过")
-        return
+    records = [(r["code"].zfill(6), r["name"]) for r in  history.get_all_codes().to_dict("records") if r["code"] >= start_code]
+    for code, name in records:
+        sql = f"select * from history where code = '{code}'"
+        df = load_df(sql, "history")
+        if df.empty:
+            logger.info("technical: 无新数据，跳过")
+            return 
 
-    df["date"] = pd.to_datetime(df["date"])
-    factor_df = build_technical_factor(df)
+        df["date"] = pd.to_datetime(df["date"])
+        factor_df = build_technical_factor(df)
 
-    # 只保存新日期的结果，旧日期已在库中
-    new_rows = factor_df[factor_df["date"] > pd.to_datetime(new_start)]
-    if new_rows.empty:
-        logger.info("technical: 计算完成但无新日期结果")
-        return
-    mysql_writer.save_technical_factor(new_rows)
+        # 只保存新日期的结果，旧日期已在库中
+        new_rows = factor_df[factor_df["date"] > pd.to_datetime(new_start)]
+        if new_rows.empty:
+            logger.info("technical: 计算完成但无新日期结果")
+            return
+        checkpoint.save_checkpoint("technical", start_code=code)
+        mysql_writer.save_technical_factor(new_rows)
 
 
 # ── financial_feature ──────────────────────────────────────────────────────────
@@ -235,7 +224,7 @@ STEPS = {
     "qdrant_profile_sync":           run_profile_qdrant_sync_step,
 }
 
-DEFAULT_DAILY_STEPS = ["history", "technical", "capital_hot", "profile", "news", "qdrant_profile_sync", "qdrant_news_sync"]
+DEFAULT_DAILY_STEPS = ["history", "technical", "capital_hot", "news", "qdrant_news_sync"]
 DEFAULT_SEASON_STEPS = ["history", "technical", "financial_statement", "financial_feature",
                          "financial_factor", "composite", "capital_hot", "profile", "news", "qdrant_profile_sync", "qdrant_news_sync"]
 
@@ -270,4 +259,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     # main()
-    run_pipeline(DEFAULT_DAILY_STEPS)
+    run_pipeline(["technical"])

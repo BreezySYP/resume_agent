@@ -13,9 +13,6 @@ def setup_logger():
             "environment": "debug",
             "host": "localhost"
         },
-
-
-
         timeout=5,
         enable_self_errors=True,      # 重要！失败时在控制台显示错误
         default_formatter=LoguruFormatter(),
