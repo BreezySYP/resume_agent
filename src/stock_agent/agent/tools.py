@@ -1,5 +1,6 @@
 """agent/tools.py — Stock Agent 工具集"""
 import datetime
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from core.minio_file import list_skills as _list_skills
@@ -87,9 +88,9 @@ def query_database(question: str) -> str:
 
 
 @tool
-def time_tool(dummy: str = "") -> str:
+def time_tool() -> str:
     """获取当前时间（精确到秒）"""
-    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.datetime.now(ZoneInfo('Asia/Shanghai')).strftime("%Y-%m-%d %H:%M:%S")
 
 
 @tool
@@ -157,10 +158,10 @@ def stock_technical_analysis(query: str):
     return df.to_dict(orient="records")
 
 
-web_search = TavilySearch(max_results=5, search_depth="advanced", include_answer=True)
+tav_search = TavilySearch(max_results=5, search_depth="advanced", include_answer=True)
 
 DB_TOOLS = [get_db_schema, execute_sql, query_database]
-SEARCH_TOOLS = [web_search]
+SEARCH_TOOLS = [tav_search]
 SKILL_TOOLS = [load_skill, list_skills, time_tool]
 SIMILAR_STOCK_INFO_TOOLS = [search_business_breakdown, search_stock_profile, search_news, stock_financial_analysis, stock_technical_analysis]
 ALL_TOOLS = DB_TOOLS + SEARCH_TOOLS + SKILL_TOOLS + SIMILAR_STOCK_INFO_TOOLS

@@ -19,3 +19,5 @@ class AgentState(TypedDict):
     stock_profile: dict
     stock_technique_factor: dict
     stock_financial_factor: dict
+    plan: str
+    current_time: str
