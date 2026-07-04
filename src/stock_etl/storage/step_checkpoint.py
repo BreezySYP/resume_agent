@@ -7,7 +7,7 @@ from shared.db.mysql import engine
 
 
 @dataclass
-class Checkpoint:
+class StepCheckpoint:
     step: str
     start_date: str | None = None
     start_code: str | None = None
@@ -15,15 +15,15 @@ class Checkpoint:
     last_completed_at: datetime.datetime | None = None
 
 
-def get_checkpoint(step: str) -> Checkpoint:
+def get_checkpoint(step: str) -> StepCheckpoint:
     with engine.connect() as conn:
         row = conn.execute(
             text("SELECT start_date, start_code, last_completed_date, last_completed_at FROM etl_checkpoint WHERE step = :step"),
             {"step": step},
         ).fetchone()
     if row is None:
-        return Checkpoint(step=step)
-    return Checkpoint(
+        return StepCheckpoint(step=step)
+    return StepCheckpoint(
         step=step,
         start_date=str(row[0]) if row[0] else None,
         start_code=row[1],

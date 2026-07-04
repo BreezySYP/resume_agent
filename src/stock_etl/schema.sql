@@ -265,3 +265,11 @@ CREATE TABLE IF NOT EXISTS etl_checkpoint (
     last_completed_at   TIMESTAMP,
     updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+
+CREATE TABLE IF NOT EXISTS etl_code_checkpoint (
+    code                VARCHAR(20) PRIMARY KEY,
+    step                VARCHAR(50),
+    start_at          TIMESTAMP,
+    completed_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);

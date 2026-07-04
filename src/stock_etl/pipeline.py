@@ -18,7 +18,7 @@ from shared.text.stock_text import (build_stock_news_text, build_stock_profile_t
                                      get_stock_news_payload, get_stock_profile_payload)
 from sources import capital_and_hot, financial_statement, history, news, profile
 from data_loader import load_df
-from storage import checkpoint, mysql_writer, qdrant_writer
+from storage import mysql_writer, qdrant_writer, step_checkpoint
 from sqlalchemy import text
 from trading_calendar import next_trading_day
 
@@ -35,7 +35,7 @@ def today() -> str:
 # ── history ────────────────────────────────────────────────────────────────────
 
 def run_history_step(start_date: str | None = None, end_date: str | None = None) -> None:
-    cp = checkpoint.get_checkpoint("history")
+    cp = step_checkpoint.get_checkpoint("history")
     effective_start = cp.last_completed_date if cp.last_completed_date else DEFAULT_START_DATE
     effective_end =  end_date or today()
     resume_code = cp.start_code or "000000"
@@ -43,7 +43,7 @@ def run_history_step(start_date: str | None = None, end_date: str | None = None)
 
     def on_batch(df: pd.DataFrame, last_code: str) -> None:
         mysql_writer.save_history(df)
-        checkpoint.save_checkpoint("history", start_code=last_code)
+        step_checkpoint.save_checkpoint("history", start_code=last_code)
 
     history.fetch_all_history(effective_start, next_trading_day(effective_end), min_code=resume_code, on_batch=on_batch)
     # checkpoint.save_checkpoint("history", start_date=effective_end)
@@ -52,7 +52,7 @@ def run_history_step(start_date: str | None = None, end_date: str | None = None)
 # ── technical ──────────────────────────────────────────────────────────────────
 
 def run_technical_step() -> None:
-    cp = checkpoint.get_checkpoint("technical")
+    cp = step_checkpoint.get_checkpoint("technical")
     new_start = cp.last_completed_date or DEFAULT_START_DATE
     start_code = '000001' or cp.start_code
     logger.info("technical: 增量计算 date > {} code > {}", new_start, start_code)
@@ -73,14 +73,14 @@ def run_technical_step() -> None:
         if new_rows.empty:
             logger.info("technical: 计算完成但无新日期结果")
             return
-        checkpoint.save_checkpoint("technical", start_code=code)
+        step_checkpoint.save_checkpoint("technical", start_code=code)
         mysql_writer.save_technical_factor(new_rows)
 
 
 # ── financial_feature ──────────────────────────────────────────────────────────
 
 def run_financial_feature_step() -> None:
-    cp = checkpoint.get_checkpoint("financial_feature")
+    cp = step_checkpoint.get_checkpoint("financial_feature")
     last_at = cp.last_completed_at or datetime.datetime(2000, 1, 1)
     logger.info("financial_feature: 增量处理 updated_at > {}", last_at)
 
@@ -95,7 +95,7 @@ def run_financial_feature_step() -> None:
 # ── financial_factor ───────────────────────────────────────────────────────────
 
 def run_financial_factor_step() -> None:
-    cp = checkpoint.get_checkpoint("financial_factor")
+    cp = step_checkpoint.get_checkpoint("financial_factor")
     last_at = cp.last_completed_at or datetime.datetime(2000, 1, 1)
     logger.info("financial_factor: 增量处理 updated_at > {}", last_at)
 
@@ -110,7 +110,7 @@ def run_financial_factor_step() -> None:
 # ── composite ──────────────────────────────────────────────────────────────────
 
 def run_composite_step(horizon: str = "medium") -> None:
-    cp = checkpoint.get_checkpoint("composite")
+    cp = step_checkpoint.get_checkpoint("composite")
     new_start = cp.last_completed_date or DEFAULT_START_DATE
     logger.info("composite: 增量计算 date > {}", new_start)
 
@@ -145,13 +145,13 @@ def run_capital_and_hot_step() -> None:
 # ── financial_statement ────────────────────────────────────────────────────────
 
 def run_financial_statement_step(start_code: int = 0, end_code: int = 1000000) -> None:
-    cp = checkpoint.get_checkpoint("financial_statement")
+    cp = step_checkpoint.get_checkpoint("financial_statement")
     resume_code = max(start_code, int(cp.start_code)) if cp.start_code else start_code
     logger.info("financial_statement: resume_code={}", resume_code)
 
     def on_batch(df: pd.DataFrame, last_code: str) -> None:
         mysql_writer.save_financial_statement(df)
-        checkpoint.save_checkpoint("financial_statement", start_code=last_code)
+        step_checkpoint.save_checkpoint("financial_statement", start_code=last_code)
 
     financial_statement.fetch_financial_statements(resume_code, end_code, on_batch=on_batch)
 
@@ -159,7 +159,7 @@ def run_financial_statement_step(start_code: int = 0, end_code: int = 1000000) -
 # ── profile ────────────────────────────────────────────────────────────────────
 
 def run_profile_step(min_code: str = "000000") -> None:
-    cp = checkpoint.get_checkpoint("profile")
+    cp = step_checkpoint.get_checkpoint("profile")
     resume_code = max(min_code, cp.start_code) if cp.start_code else min_code
     logger.info("profile: resume_code={}", resume_code)
 
@@ -168,7 +168,7 @@ def run_profile_step(min_code: str = "000000") -> None:
             mysql_writer.save_stock_profile(profile_df)
         if not breakdown_df.empty:
             mysql_writer.save_stock_business_breakdown(breakdown_df)
-        checkpoint.save_checkpoint("profile", start_code=last_code)
+        step_checkpoint.save_checkpoint("profile", start_code=last_code)
 
     profile.fetch_profiles_and_breakdowns(resume_code, on_batch=on_batch)
 
@@ -176,21 +176,22 @@ def run_profile_step(min_code: str = "000000") -> None:
 # ── news ───────────────────────────────────────────────────────────────────────
 
 def run_news_step(min_code: str = "000000") -> None:
-    cp = checkpoint.get_checkpoint("news")
+    cp = step_checkpoint.get_checkpoint("news")
     resume_code = max(min_code, cp.start_code) if cp.start_code else min_code
     logger.info("news: resume_code={}", resume_code)
 
     def on_batch(df: pd.DataFrame, last_code: str) -> None:
         mysql_writer.save_stock_news(df)
-        checkpoint.save_checkpoint("news", start_code=last_code)
+        step_checkpoint.save_checkpoint("news", start_code=last_code)
 
     news.fetch_all_stock_news(resume_code, on_batch=on_batch)
+    
 
 
 # ── qdrant sync ────────────────────────────────────────────────────────────────
 
 def run_news_qdrant_sync_step() -> None:
-    cp = checkpoint.get_checkpoint("qdrant_sync")
+    cp = step_checkpoint.get_checkpoint("qdrant_sync")
     last_at = cp.last_completed_at or datetime.datetime(2000, 1, 1)
     logger.info("qdrant_sync: 增量同步 updated_at > {}", last_at)
 
@@ -199,7 +200,7 @@ def run_news_qdrant_sync_step() -> None:
         qdrant_writer.upsert_hybrid(news_df, QDRANT_NEWS_COLLECTION, build_stock_news_text, get_stock_news_payload)
 
 def run_profile_qdrant_sync_step() -> None:
-    cp = checkpoint.get_checkpoint("qdrant_sync")
+    cp = step_checkpoint.get_checkpoint("qdrant_sync")
     last_at = cp.last_completed_at or datetime.datetime(2000, 1, 1)
     logger.info("qdrant_sync: 增量同步 updated_at > {}", last_at)
 
@@ -233,7 +234,7 @@ def run_pipeline(steps: list[str]) -> None:
         if step not in STEPS:
             logger.warning("跳过未知 step: {}", step)
             continue
-        if checkpoint.is_completed_today(step):
+        if step_checkpoint.is_completed_today(step):
             logger.info("⏭️  skip {} (今天已完成)", step)
             continue
         logger.info("=== start: {} ===", step)
@@ -242,7 +243,7 @@ def run_pipeline(steps: list[str]) -> None:
         except Exception as e:
             logger.error("❌ {} 失败: {}，下次从断点继续", step, e)
             raise
-        checkpoint.mark_completed(step)
+        step_checkpoint.mark_completed(step)
         logger.success("=== done: {} ===", step)
 
 

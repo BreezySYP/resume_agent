@@ -32,6 +32,13 @@ def transform_wide(df: pd.DataFrame, code: str) -> pd.DataFrame:
     return pd.DataFrame([{"code": code, "report_date": date, **values} for (code, date), values in result.items()])
 
 
+def fetch_financial_statement(code, name):
+    raw = ak.stock_financial_abstract(symbol=code)
+    df = transform_wide(raw, code)
+    df["name"] = name
+    logger.info("fetched {} {}", code, name)
+    return df
+
 def fetch_financial_statements(start_code: int = 0, end_code: int = 1000000, on_batch=None, batch_size: int = 50) -> None:
     """逐批抓取财务摘要。每 batch_size 只股票后调用 on_batch(df, last_code)：
     调用方负责在 on_batch 里先存 DB 再更新 checkpoint。
@@ -43,17 +50,12 @@ def fetch_financial_statements(start_code: int = 0, end_code: int = 1000000, on_
     last_code = None
     for code, name in codes:
         try:
-            raw = ak.stock_financial_abstract(symbol=code)
+            df = fetch_financial_statement(code, name)
         except Exception as e:
             logger.error("[FETCH ERROR] {}: {}", code, e)
             time.sleep(120)
             continue
-        df = transform_wide(raw, code)
-        df["name"] = name
         frames.append(df)
-        last_code = code
-        logger.info("fetched {} {}", code, name)
-
         if on_batch and len(frames) >= batch_size and last_code:
             on_batch(pd.concat(frames, ignore_index=True), last_code)
             frames = []
