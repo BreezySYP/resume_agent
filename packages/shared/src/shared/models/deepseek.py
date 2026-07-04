@@ -6,10 +6,11 @@ import os
 api_key = os.getenv("DEEP_SEEK_KEY")
 
 @lru_cache(maxsize=1)
-def get_deepseek() -> ChatDeepSeek:
+def get_deepseek(temperature=0.0) -> ChatDeepSeek:
 
     return ChatDeepSeek(
         model="deepseek-v4-flash",
+        temperature=temperature,
         api_key=api_key
     )
 

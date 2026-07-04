@@ -21,3 +21,6 @@ class AgentState(TypedDict):
     stock_financial_factor: dict
     plan: str
     current_time: str
+    errors: List[str] = []
+    confidence: float = 0.0
+    news_analysis: str

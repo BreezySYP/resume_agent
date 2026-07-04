@@ -24,10 +24,10 @@ def profile_node(state: AgentState) -> Dict[str, Any]:
     try:
         profile = search_stock_profile.invoke(keywords.content)
         return {
-            "stock_profile": profile or [],
-            "messages": state.get("messages", []) + [
-                SystemMessage(content=f"已获取 {len(profile) if isinstance(profile, list) else 0} 个股票画像")
-            ]
+            "stock_profile": profile or []
+            # "messages": state.get("messages", []) + [
+            #     SystemMessage(content=f"已获取 {len(profile) if isinstance(profile, list) else 0} 个股票画像")
+            # ]
         }
     except Exception as e:
-        return {"stock_profile": [], "error": str(e)}
+        return {"stock_profile": [], "errors": state.get("errors", []) + [str(e)] }
