@@ -26,8 +26,8 @@ def get_stock_list(db: Session, page: int = 1, page_size: int = 50, keyword: str
     offset = (page - 1) * page_size
 
     # 基础列表
-    where = "WHERE CA
-    
+    where = "WHERE CAST(code AS CHAR) LIKE :kw OR name LIKE :kw" if keyword else ""
+    kw    = f"%{keyword}%"
     count_sql = text(f"""
         SELECT COUNT(DISTINCT code) FROM history {where}
     """)
@@ -118,7 +118,7 @@ def get_stock_detail(db: Session, code: str) -> dict:
     # 新闻 最近 20 条
     news = db.execute(
         text("""
-            SELECT id, title, content, source, url, date
+            SELECT id, title, content, mediaName, url, date
             FROM stock_news WHERE code = :code
             ORDER BY date DESC LIMIT 20
         """),

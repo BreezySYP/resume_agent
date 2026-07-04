@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from loguru import logger
 
-from shared.db import get_db
+from shared.db.mysql import get_db
 from services.etl_service import (
     STEPS_META,
     PER_STOCK_STEPS,

@@ -73,7 +73,6 @@ def execute_query(sql: str, max_rows: int = 100) -> list[dict]:
         cols = result.keys()
         return [dict(zip(cols, row)) for row in result.fetchmany(max_rows)]
 
-
 def get_dataframe(sql: str, params: dict | None = None) -> pd.DataFrame:
     with engine.connect() as conn:
         return pd.read_sql(text(sql), conn, params=params)

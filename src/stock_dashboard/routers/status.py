@@ -3,8 +3,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from stock_dashboard.db import get_db
-from stock_dashboard.services.etl_service import STEPS_META
+from shared.db.mysql import get_db
+from services.etl_service import STEPS_META
 
 router = APIRouter(prefix="/api/status", tags=["ETL 状态"])
 

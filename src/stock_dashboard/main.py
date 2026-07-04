@@ -3,8 +3,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
-
-# from stock_dashboard.db import init_db
 from routers import stocks, etl, status
 
 
