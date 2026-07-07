@@ -1,0 +1,49 @@
+# 忽略所有 CSV 文件
+*.csv
+
+# 忽略其他数据文件
+*.parquet
+*.xlsx
+*.xls
+
+# 忽略常见的 Python 缓存和虚拟环境
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.coverage
+
+# 忽略 Git
+.git
+.gitignore
+
+# 忽略 IDE 配置
+.vscode
+.idea
+
+# 忽略日志和临时文件
+*.log
+*.tmp
+*.temp
+
+# 忽略环境变量文件
+.env
+.env.local
+
+# 忽略测试数据
+test_data/
+sample_data/
+data/
+notebook/
+tests/
+
+#
+.venv
+.uv-cache
+.langgraph_api
+.ipynb_checkpoints
+.devcontainer
+
+
+
+

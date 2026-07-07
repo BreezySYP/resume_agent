@@ -17,9 +17,11 @@ from shared.code_rule import add_prefix
 from shared.db.mysql import engine, execute_query
 from shared.text.stock_text import (build_stock_news_text, build_stock_profile_text,
                                      get_stock_news_payload, get_stock_profile_payload)
-from sources import capital_and_hot, financial_statement, history, news, profile
+from sources import capital_and_hot
 from data_loader import load_df
-from storage import mysql_writer, qdrant_writer, code_checkpoint, step_checkpoint
+from sources import financial_statement, history, news, profile
+from storage import code_checkpoint, mysql_writer, qdrant_writer
+from storage import step_checkpoint
 from sqlalchemy import text
 from trading_calendar import next_trading_day
 
@@ -35,18 +37,17 @@ def today() -> str:
 
 # ── history ────────────────────────────────────────────────────────────────────
 
-def run_history_step(code :str, name: str ) -> None:
+def run_history_step(code :str, name: str, start_date ) -> None:
     """code 格式是 000001"""
     end_date: str=today()
-    records = execute_query(f"select max(date) from history where code = '{code}'")
-    start_date = records[0]["date"]
+    # records = execute_query(f"select max(date) as date from history where code = '{code}'")
+    # start_date = records[0]["date"].strftime("%Y-%m-%d")
     logger.info("history: start={}, end={}, code={}", start_date, end_date, code)
     df = history.fetch_history(name, code, start_date, next_trading_day(end_date))
     if df.empty:
         logger.info("history: 无新数据，跳过")
         return
     mysql_writer.save_history(df)
-
 
 
 
@@ -58,7 +59,7 @@ def run_composite_step(horizon: str = "medium") -> None:
     logger.info("composite: 增量计算 date > {}", new_start)
 
     # 只取新的技术因子日期
-    technical_df = load_df(f"SELECT * FROM technical_factor WHERE date > {new_start} ORDER BY code, date", "technical_factor")
+    technical_df = load_df(f"SELECT * FROM technical_factor WHERE date >= {new_start} ORDER BY code, date", "technical_factor")
 
     if technical_df.empty:
         logger.info("composite: 无新技术因子，跳过")
@@ -87,7 +88,7 @@ def run_capital_and_hot_step() -> None:
 
 # ── financial_statement ────────────────────────────────────────────────────────
 
-def run_financial_statement_step(code, name) -> None:
+def run_financial_statement_step(code, name, start_date) -> None:
     """code 格式为 sz000001"""
     code = add_prefix(code)
     logger.info("financial_statement: code={} name={}", code, name)
@@ -100,13 +101,11 @@ def run_financial_statement_step(code, name) -> None:
 
 # ── financial_feature ──────────────────────────────────────────────────────────
 
-def run_financial_feature_step(code, name) -> None:
+def run_financial_feature_step(code, name, start_date) -> None:
     """code 格式为 sz000001"""
     code = add_prefix(code)
     logger.info("financial_feature: 增量处理 code:{} name: {}", code, name)
-    records = execute_query(f"select max(date) from financial_statement where code = '{code}'")
-    start_date = records[0]["date"]
-    df = pd.read_sql(f"SELECT * FROM financial_statement WHERE report_date > {start_date} and code = {code}", con=engine.connect())
+    df = pd.read_sql(f"SELECT * FROM financial_statement WHERE report_date >= {start_date} and code = {code}", con=engine.connect())
     if df.empty:
         logger.info("financial_feature: 无新数据，跳过")
         return
@@ -115,7 +114,7 @@ def run_financial_feature_step(code, name) -> None:
 
 # ── profile ────────────────────────────────────────────────────────────────────
 
-def run_profile_step(code, name) -> None:
+def run_profile_step(code, name, start_date) -> None:
     """code 格式是 000001"""
     logger.info("profile: code={} name={}", code, name)
     df = profile.fetch_profile(code, name)
@@ -123,7 +122,8 @@ def run_profile_step(code, name) -> None:
         logger.info("profile: 无新数据，跳过")
     else:
         mysql_writer.save_stock_profile(df)
-        qdrant_writer.upsert_hybrid(df, QDRANT_PROFILE_COLLECTION, build_stock_profile_text, get_stock_profile_payload)
+        profile_df = pd.read_sql(f"SELECT * FROM stock_profile WHERE code = {code} AND update_time >= '{start_date}'", con=engine.connect())
+        qdrant_writer.upsert_hybrid(profile_df, QDRANT_PROFILE_COLLECTION, build_stock_profile_text, get_stock_profile_payload)
     df = profile.fetch_news_breakdown(code, name)
     if df.empty:
         logger.info("fetch_news_breakdown: 无新数据，跳过")
@@ -132,7 +132,7 @@ def run_profile_step(code, name) -> None:
 
 # ── news ───────────────────────────────────────────────────────────────────────
 
-def run_news_step(code, name) -> None:
+def run_news_step(code, name, start_date) -> None:
     """code format is 000001"""
     logger.info("add news for code {} name {}", code, name)
 
@@ -142,7 +142,8 @@ def run_news_step(code, name) -> None:
         return 
 
     mysql_writer.save_stock_news(df)
-    qdrant_writer.upsert_hybrid(df, QDRANT_NEWS_COLLECTION, build_stock_news_text, get_stock_news_payload)
+    news_df = pd.read_sql(f"SELECT * FROM stock_news WHERE code = {code} AND fetch_time >= '{start_date}'", con=engine.connect())
+    qdrant_writer.upsert_hybrid(news_df, QDRANT_NEWS_COLLECTION, build_stock_news_text, get_stock_news_payload)
     
 
 
@@ -204,26 +205,85 @@ DEFAULT_DAILY_STEPS = ["history", "technical", "capital_hot", "news", "qdrant_ne
 DEFAULT_SEASON_STEPS = ["history", "technical", "financial_statement", "financial_feature",
                          "financial_factor", "composite", "capital_hot", "profile", "news", "qdrant_profile_sync", "qdrant_news_sync"]
 
+def get_codes():
+    code_names = {r["code"]: r["name"] for r in history.get_all_codes().to_dict("records")}
+    df_checkpoint = pd.read_sql("SELECT * FROM etl_code_checkpoint", con=engine.connect())
+    code_group = df_checkpoint.groupby("code")
+    result = []
+    now = datetime.datetime.now()
+    
+    for code in code_names.keys():
+        # 检查这个code是否有checkpoint记录
+        if code not in code_group.groups:
+            # 如果没有记录，说明从未运行过，需要处理
+            result.append((code, code_names[code]))
+            continue
+        
+        # 获取该code的所有记录
+        group_data = code_group.get_group(code)
+        
+        # 检查是否所有记录的 complete_at 的下一个8点都大于 now
+        # 如果是，说明所有任务都还没到下一个8点，跳过
+        all_future = all(
+            code_checkpoint.get_next_8am(pd.to_datetime(row.completed_at, unit='s')) > now 
+            for _, row in group_data.iterrows()
+        )
+        
+        if all_future:
+            # 所有记录的下一个8点都在未来，暂时不需要处理
+            continue
+        
+        # 否则，至少有一条记录的下一个8点已到或已过，需要处理
+        result.append((code, code_names[code]))
+    
+    return result
+
+
+def run_code_pipeline(code, steps: list[str]) -> None:
+    name = get_name(code)
+    for step in steps:
+            start_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if step not in CODE_BY_CODE_STEPS:
+                logger.warning("跳过未知 step: {}", step)
+                continue
+            if code_checkpoint.is_completed_today(code, step):
+                logger.info("⏭️  skip {} {} (今天已完成)", code, step)
+                continue
+            logger.info("=== start: {} ===", step)
+            try:
+                CODE_BY_CODE_STEPS[step](code, name, start_at)
+            except Exception as e:
+                logger.error("❌ {} 失败: {}，下次从断点继续", step, e)
+                raise
+            code_checkpoint.save_checkpoint(code, step, start_at)
+            logger.success("=== done: {} for code {} name {} ===", step, code, name)
+
+
 def run_pipeline(steps: list[str]) -> None:
-    code_names =  [((r["code"]), r["name"]) for r in history.get_all_codes().to_dict("records")]
-    for code, name in code_names:
+    
+    for code, name in get_codes():
         for step in steps:
             start_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             if step not in CODE_BY_CODE_STEPS:
                 logger.warning("跳过未知 step: {}", step)
                 continue
             if code_checkpoint.is_completed_today(code, step):
-                logger.info("⏭️  skip {} (今天已完成)", step)
+                logger.info("⏭️  skip {} {} (今天已完成)", code, step)
                 continue
             logger.info("=== start: {} ===", step)
             try:
-                CODE_BY_CODE_STEPS[step](code, name)
+                CODE_BY_CODE_STEPS[step](code, name, start_at)
             except Exception as e:
                 logger.error("❌ {} 失败: {}，下次从断点继续", step, e)
                 raise
             code_checkpoint.save_checkpoint(code, step, start_at)
-            logger.success("=== done: {} ===", step)
+            logger.success("=== done: {} for code {} name {} ===", step, code, name)
 
+def get_name(code: str):
+    with engine.begin() as db:
+        query = db.execute(text("SELECT name FROM history WHERE code = :code"), {"code": code})
+        result = query.fetchone()
+        return result[0]
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Stock ETL pipeline")
@@ -232,10 +292,12 @@ def main() -> None:
         help=f"逗号分隔，可选: {','.join(STEPS)} 或 all",
     )
     args = parser.parse_args()
-    steps = list(STEPS) if args.steps == "all" else [s.strip() for s in args.steps.split(",") if s.strip()]
+    steps = list(CODE_BY_CODE_STEPS) if args.steps == "all" else [s.strip() for s in args.steps.split(",") if s.strip()]
     run_pipeline(steps)
 
 
 if __name__ == "__main__":
     # main()
-    run_pipeline(["technical"])
+    # print(get_codes())
+    print(get_name("000001"))
+    # run_pipeline(["history", "profile", "news"])

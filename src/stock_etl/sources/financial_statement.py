@@ -36,6 +36,7 @@ def fetch_financial_statement(code, name):
     raw = ak.stock_financial_abstract(symbol=code)
     df = transform_wide(raw, code)
     df["name"] = name
+    df['report_date'] = pd.to_datetime(df['report_date'], format='%Y%m%d')
     logger.info("fetched {} {}", code, name)
     return df
 
@@ -64,3 +65,7 @@ def fetch_financial_statements(start_code: int = 0, end_code: int = 1000000, on_
 
     if on_batch and frames and last_code:
         on_batch(pd.concat(frames, ignore_index=True), last_code)
+
+
+if __name__ == "__main__":
+    print(fetch_financial_statement("000001", "aaaaa"))

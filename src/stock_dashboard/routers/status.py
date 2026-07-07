@@ -73,10 +73,10 @@ def clear_checkpoint(step: str, db: Session = Depends(get_db)):
     "/summary",
     summary="ETL 整体健康状态",
     description="""
-汇总视图，一次性返回：
-- 各 step 的 checkpoint 状态
-- 各 step 最近一次执行的成功/失败状态
-- 当前运行中的任务数量
+        汇总视图，一次性返回：
+        - 各 step 的 checkpoint 状态
+        - 各 step 最近一次执行的成功/失败状态
+        - 当前运行中的任务数量
     """,
 )
 def get_summary(db: Session = Depends(get_db)):

@@ -63,3 +63,6 @@ def fetch_all_stock_news(min_code: str = "000000", on_batch=None, batch_size: in
 
     if on_batch and frames and last_code:
         on_batch(pd.concat(frames, ignore_index=True), last_code)
+
+if __name__ == "__main__":
+    print(fetch_stock_news("000001", "aaaa"))

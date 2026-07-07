@@ -128,7 +128,7 @@ def get_stock_detail(db: Session, code: str) -> dict:
     # 财务报表 最近 8 条
     financial = db.execute(
         text("""
-            SELECT report_date, revenue, net_profit, eps, roe, report_type
+            SELECT report_date, revenue, net_profit, eps, roe
             FROM financial_statement WHERE code = :code
             ORDER BY report_date DESC LIMIT 8
         """),

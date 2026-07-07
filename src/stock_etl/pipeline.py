@@ -16,9 +16,11 @@ from loguru import logger
 from shared.db.mysql import engine
 from shared.text.stock_text import (build_stock_news_text, build_stock_profile_text,
                                      get_stock_news_payload, get_stock_profile_payload)
-from sources import capital_and_hot, financial_statement, history, news, profile
+from sources import capital_and_hot
 from data_loader import load_df
-from storage import mysql_writer, qdrant_writer, step_checkpoint
+from sources import financial_statement, history, news, profile
+from storage import mysql_writer, qdrant_writer
+from storage import step_checkpoint
 from sqlalchemy import text
 from trading_calendar import next_trading_day
 

@@ -19,6 +19,7 @@ from services.etl_service import (
     sse_stream,
     get_running_jobs,
     get_job_logs,
+    trigger_stock_etl
 )
 
 router = APIRouter(prefix="/api/etl", tags=["ETL 任务"])
@@ -37,7 +38,7 @@ class TriggerAllRequest(BaseModel):
 
 
 class TriggerResponse(BaseModel):
-    job_ids: List[int]
+    # job_ids: List[int]
     message: str
 
 
@@ -65,11 +66,11 @@ def list_steps():
     response_model=TriggerResponse,
     summary="触发单股 ETL 下载",
     description=f"""
-为指定股票触发一个或多个 ETL step。
+        为指定股票触发一个或多个 ETL step。
 
-支持单股触发的 step：`{PER_STOCK_STEPS}`
+        支持单股触发的 step：`{PER_STOCK_STEPS}`
 
-触发后返回 job_ids，可通过 `/api/etl/stream/{{job_id}}` 订阅 SSE 实时进度。
+        触发后返回 job_ids，可通过 `/api/etl/stream/{{job_id}}` 订阅 SSE 实时进度。
     """,
 )
 async def trigger_stock(
@@ -77,23 +78,13 @@ async def trigger_stock(
     background: BackgroundTasks,
     db:         Session = Depends(get_db),
 ):
-    invalid = [s for s in req.steps if s not in PER_STOCK_STEPS]
-    if invalid:
-        raise HTTPException(
-            status_code=400,
-            detail=f"以下 step 不支持单股触发: {invalid}，可用: {PER_STOCK_STEPS}"
+    result = trigger_stock_etl(code=req.code, steps=req.steps)
+    if result == "OK":
+        return TriggerResponse(
+            message="OK"
         )
-
-    job_ids = []
-    for step in req.steps:
-        job_id = create_job(db, code=req.code, step=step, triggered_by="manual")
-        job_ids.append(job_id)
-        background.add_task(run_step_async, db, job_id, req.code, step)
-
-    return TriggerResponse(
-        job_ids=job_ids,
-        message=f"已为 {req.code} 创建 {len(job_ids)} 个任务"
-    )
+    else:
+        raise HTTPException(status_code=500, detail=f"wrong request")
 
 
 @router.post(

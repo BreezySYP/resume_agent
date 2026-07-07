@@ -39,16 +39,6 @@ SEASON_STEPS = ["history", "technical", "financial_statement", "financial_featur
 _sse_queues: dict[int, asyncio.Queue] = {}
 
 
-def _get_pipeline():
-    """懒加载 pipeline 模块，避免循环依赖"""
-    stock_etl_path = os.path.join(
-        os.path.dirname(__file__), "../../../../stock_etl"
-    )
-    if stock_etl_path not in sys.path:
-        sys.path.insert(0, stock_etl_path)
-    return importlib.import_module("pipeline")
-
-
 def create_job(db: Session, code: str, step: str, triggered_by: str = "manual") -> int:
     """在 etl_job_log 创建一条 pending 记录，返回 job_id"""
     sql = text("""
@@ -181,3 +171,17 @@ def get_job_logs(db: Session, code: str = None,
     """)
     rows = db.execute(sql, params).mappings().fetchall()
     return [dict(r) for r in rows]
+
+PER_STOCK_STEPS = ["history", "profile", "news"]
+
+import requests
+
+url = "http://host.docker.internal:8011/api/etl/trigger/stock"
+
+def trigger_stock_etl(code:str, steps: List[str]):
+    response = requests.post(url, json={"code": code, "steps": steps})
+    if response.status_code == 200:
+        return "OK"
+
+if __name__ == "__main__":
+    print(trigger_stock_etl("000004", ["profile", "news"]))

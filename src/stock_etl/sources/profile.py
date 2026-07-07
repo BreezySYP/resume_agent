@@ -56,6 +56,7 @@ def fetch_news_breakdown(code, name):
     else:
         zygc = zygc.rename(columns=BREAKDOWN_RENAME)
         zygc["name"] = name
+        logger.info("fetched fetch_news_breakdown for {} {}", code, name)
     return zygc
 
 def fetch_profiles_and_breakdowns(min_code: str = "000000", on_batch=None, batch_size: int = 50) -> None:
@@ -94,5 +95,6 @@ def fetch_profiles_and_breakdowns(min_code: str = "000000", on_batch=None, batch
             last_code,
         )
 
-# if __name__ == "__main__":
-#     # fetch_profiles_and_breakdowns()
+if __name__ == "__main__":
+    print(fetch_profile("000001", "haha"))
+    print(fetch_news_breakdown("000001", "haha"))

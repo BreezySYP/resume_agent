@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
-from routers import stocks, etl, status
+from router import etl_router
 
 
 @asynccontextmanager
@@ -16,19 +16,18 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Stock Dashboard API",
+    title="Stock ETL Dashboard API",
     description="""
-A股数据 ETL 管理后台 API。
+        A股数据 ETL 管理后台 API。
 
-## 功能模块
+        ## 功能模块
 
-- **股票数据**：查看股票列表、单股详情（K线/新闻/财务/简介）
-- **ETL 任务**：触发单股或全量数据下载，SSE 实时进度推送
-- **ETL 状态**：查看 checkpoint 断点状态、任务执行历史
+        - **ETL 任务**：触发单股或全量数据下载，SSE 实时进度推送
+        - **ETL 状态**：查看 checkpoint 断点状态、任务执行历史
 
-## 数据来源
+        ## 数据来源
 
-底层复用 `stock_etl` 项目的 pipeline，通过 akshare / tushare 等包采集数据。
+        底层复用 `stock_etl` 项目的 pipeline，通过 akshare / tushare 等包采集数据。
     """,
     version="0.1.0",
     lifespan=lifespan,
@@ -44,16 +43,14 @@ app.add_middleware(
 )
 
 # 注册路由
-app.include_router(stocks.router)
-app.include_router(etl.router)
-app.include_router(status.router)
+app.include_router(etl_router.router)
 
 
 @app.get("/", tags=["健康检查"], summary="服务健康检查")
 def health_check():
-    return {"status": "ok", "service": "stock-dashboard-api"}
+    return {"status": "ok", "service": "stock-etl-api"}
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8010, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8011, reload=True)

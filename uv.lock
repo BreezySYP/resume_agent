@@ -5319,6 +5319,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pymysql" },
     { name = "python-dotenv" },
+    { name = "shared" },
     { name = "sqlalchemy" },
     { name = "sse-starlette" },
     { name = "uvicorn", extra = ["standard"] },
@@ -5331,6 +5332,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pymysql", specifier = ">=1.1" },
     { name = "python-dotenv", specifier = ">=1.0" },
+    { name = "shared", editable = "packages/shared" },
     { name = "sqlalchemy", specifier = ">=2.0" },
     { name = "sse-starlette", specifier = ">=1.8" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.29" },
@@ -5344,6 +5346,7 @@ dependencies = [
     { name = "akshare" },
     { name = "baostock" },
     { name = "dbutils" },
+    { name = "fastapi" },
     { name = "fastembed" },
     { name = "loguru" },
     { name = "matplotlib" },
@@ -5356,6 +5359,7 @@ dependencies = [
     { name = "scipy" },
     { name = "shared" },
     { name = "sqlalchemy" },
+    { name = "uvicorn" },
 ]
 
 [package.metadata]
@@ -5363,6 +5367,7 @@ requires-dist = [
     { name = "akshare", specifier = ">=1.10" },
     { name = "baostock", specifier = ">=0.8" },
     { name = "dbutils", specifier = ">=3.0" },
+    { name = "fastapi", specifier = ">=0.138.2" },
     { name = "fastembed", specifier = ">=0.8.0" },
     { name = "loguru", specifier = ">=0.7" },
     { name = "matplotlib", specifier = ">=3.10.9" },
@@ -5375,6 +5380,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.11" },
     { name = "shared", editable = "packages/shared" },
     { name = "sqlalchemy", specifier = ">=2.0" },
+    { name = "uvicorn", specifier = ">=0.48.0" },
 ]
 
 [[package]]
