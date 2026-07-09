@@ -3,6 +3,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import RetryPolicy
 
+from agent.error_handler import error_handler_middleware
 from shared.agents.agent_state import AgentState
 
 # 导入所有 node 函数
@@ -22,13 +23,13 @@ def build_investment_agent(checkpointer=None):
     # 统一 retry 配置
     default_retry = RetryPolicy(max_attempts=3, retry_on=[Exception])  # 可自定义异常
     
-    workflow.add_node("supervisor", supervisor_node, retry_policy=default_retry)
-    workflow.add_node("profile", profile_node)
-    workflow.add_node("fundamental", fundamental_node)
-    workflow.add_node("technical", technical_node)
-    workflow.add_node("news", news_node, retry_policy=RetryPolicy(max_attempts=5))  # news 重试更多
-    workflow.add_node("synthesizer", synthesizer_node)
-    workflow.add_node("reflection", reflection_node)
+    workflow.add_node("supervisor", error_handler_middleware(supervisor_node), retry_policy=default_retry)
+    workflow.add_node("profile", error_handler_middleware(profile_node))
+    workflow.add_node("fundamental", error_handler_middleware(fundamental_node))
+    workflow.add_node("technical", error_handler_middleware(technical_node))
+    workflow.add_node("news", error_handler_middleware(news_node), retry_policy=RetryPolicy(max_attempts=5))  # news 重试更多
+    workflow.add_node("synthesizer", error_handler_middleware(synthesizer_node))
+    workflow.add_node("reflection", error_handler_middleware(reflection_node))
     
     # 边（并行结构清晰）
     workflow.add_edge(START, "supervisor")
@@ -79,10 +80,13 @@ def ask_investment(question: str, thread_id: str = "default"):
     agent = build_investment_agent()
     result = agent.invoke({"user_question": question}, config=config)
     
-    return result.get("final_answer", "生成失败，请查看日志")
+    return result
 
 if __name__ == "__main__":
-    print(ask_investment("下半年人形机器人相关股票怎么样，机会会比芯片更好么？"))
+    result = ask_investment("国内AI应用前景如何，有什么投资建议，最好能帮我发现下半年最有可能暴增的冷门潜力股，而不是给我大家都知道的龙头股？")
+
+    print(result.get("final_answer"))
+    print(result["messages"][-1].content)
 
     # from langsmith import evaluate, Client
     # client = Client()
@@ -90,6 +94,11 @@ if __name__ == "__main__":
     #     """Agent 执行函数 - 必须返回 output"""
     #     question = inputs["user_question"]
     #     answer = ask_investment(question)
+
+
+
+
+
     #     return {
     #         "output": answer,                    # 关键字段
     #         "final_answer": answer               # 可选

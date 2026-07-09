@@ -131,21 +131,24 @@ def technical_node(state: AgentState) -> Dict[str, Any]:
     if not state.get("stock_profile"):
         return {"stock_technique_factor": []}
     
-    try:
-        codes = [int(remove_prefix(p["code"])) for p in state["stock_profile"]]
-        sql = f"""
-            SELECT t.* FROM technical_factor t
-            JOIN (
-                SELECT code, MAX(date) AS max_date 
-                FROM technical_factor 
-                WHERE code IN ({str(codes)[1:-1]}) 
-                GROUP BY code
-            ) latest ON t.code = latest.code AND t.date = latest.max_date;
-        """
-        df = pd.read_sql(sql, engine.connect()).round(2)
+    codes = [int(remove_prefix(p["code"])) for p in state["stock_profile"]]
+    # sql = f"""
+    #     SELECT t.* FROM technical_factor t
+    #     JOIN (
+    #         SELECT code, MAX(date) AS max_date 
+    #         FROM technical_factor 
+    #         WHERE code IN ({str(codes)[1:-1]}) 
+    #         GROUP BY code
+    #     ) latest ON t.code = latest.code AND t.date = latest.max_date;
+    # """
+    sql = f"""
+        SELECT t.* FROM technical_factor t WHERE code IN ({str(codes)[1:-1]})  and date > '2023-01-01';
+    """
+    df = pd.read_sql(sql, engine.connect()).round(2)
 
-        
+    result = df.to_dict(orient="records")
 
-        return {"stock_technique_factor": df.to_dict(orient="records")}
-    except Exception as e:
-        return {"stock_technique_factor": [], "error": str(e)}
+    return {
+        "stock_technique_factor": result,
+        "rag_contexts": [result]
+    }

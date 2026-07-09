@@ -1,33 +1,150 @@
 import datetime
+import json
 from typing import Any, Dict, Literal
 from zoneinfo import ZoneInfo
 
+import pandas as pd
+from agent.tools import search_stock_profile, tav_search
 from langchain_core.messages import (AIMessage, HumanMessage, SystemMessage,
                                      ToolMessage)
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
-from agent.tools import search_stock_profile
+from service.cuda_service import rerank
 from shared.agents.agent_state import AgentState
 from shared.models.deepseek import get_deepseek
+from shared.text.stock_text import build_stock_profile_text
+from pydantic import BaseModel, Field
+from loguru import logger
 
-def profile_node(state: AgentState) -> Dict[str, Any]:
-    """股票画像节点"""
-    model = get_deepseek()
-    prompt = HumanMessage(content=f"""
-        根据以下用户问题提取关键股票/公司关键词：
+MAX_ITER = 3
+
+
+class 
+
+class SearchPlan(BaseModel):
+    finished: bool = Field(description="是否已经覆盖行业，可以结束搜索")
+    keywords: list[str] = Field(description="下一轮搜索关键词")
+    reason: str = Field(description="为什么生成这些关键词")
+
+def profile_node(state: AgentState):
+
+    # 第一轮关键词
+    first_prompt = HumanMessage(content=f"""
+        用户问题：
         {state["user_question"]}
-        只返回关键词列表或公司名称，简洁无解释。
-        """)
+
+        不要回答问题。
+        请提取3~5个搜索关键词。
+
+        例如：
+        芯片 -> 芯片、半导体、集成电路
+        机器人 -> 机器人、工业机器人、人形机器人
+
+        仅返回JSON：
+        {{
+            "keywords":[]
+        }}
+    """)
+
+    # from langchain.agents import create_agent
+
+    # agent = create_agent(
+    #     model= get_deepseek(),
+    #     tools=[tav_search],
+    #     system_prompt=SystemMessage(content=first_prompt)
+    # )
+
+    model = get_deepseek()
+    parser = JsonOutputParser(pydantic_object=SearchPlan)
+    keywords = model.invoke([first_prompt]).content
+    keywords = json.loads(keywords)["keywords"]
+    searched_keywords = set()
+    all_profiles = {}
+
+    for i in range(MAX_ITER):
+        logger.debug("start {} iter for profile node", i)
+        current_result = []
+
+        # ---------- 搜索 ----------
+        for kw in keywords:
+            if kw in searched_keywords:
+                continue
+            searched_keywords.add(kw)
+            docs = search_stock_profile.invoke(kw).to_dict(orient="records")
+            if not docs:
+                continue
+            if isinstance(docs, dict):
+                docs = [docs]
+            current_result.extend(docs)
+
+        # ---------- 去重 ----------
+        for stock in current_result:
+            all_profiles[stock["code"]] = stock
+
+        companies = "\n".join(
+            f'{x["code"]} {x["name"]}'
+            for x in all_profiles.values()
+        )
+
+        business = "\n".join(
+            x.get("business", "")
+            for x in all_profiles.values()
+        )
+        SEARCH_PROMPT = """
+            你是一名A股行业研究员。
+
+            用户问题：
+            {question}
+
+            已经搜索过的关键词：
+            {searched_keywords}
+
+            目前已经召回的股票：
+            {companies}
+
+            经营范围摘要：
+            {business}
+
+            你的任务：
+            1. 判断目前行业覆盖是否完整
+            2. 如果不完整，请生成下一轮搜索关键词
+            3. 不要重复已经搜索过的关键词
+            4. 尽量覆盖整个产业链（上游、中游、下游）
+            5. 每轮最多生成5个关键词
+
+            返回JSON：
+            {format_instructions}
+            """
+        # ---------- Reflection ----------
+        prompt = HumanMessage(content=SEARCH_PROMPT.format(
+            question=state["user_question"],
+            searched_keywords=list(searched_keywords),
+            companies=companies,
+            business=business,
+            format_instructions=parser.get_format_instructions()
+        ))
+
+        response = model.invoke([prompt])
+
+        plan = parser.parse(response.content)
+        if plan["finished"]:
+            break
+        keywords = plan["keywords"]
+
+    profiles = pd.DataFrame(list(all_profiles.values()))
+    scores = rerank(query=state["user_question"], docs=[build_stock_profile_text(row) for _, row in profiles.iterrows()])
+    profiles["rerank_score"] = scores["rerank_score"]
+    profiles = profiles.loc[profiles["rerank_score"].nlargest(20).index]
+    profiles = profiles.drop(columns=["scope"])
+    logger.debug("finish profile node")
+
+    return {
+        "stock_profile": profiles,
+        "rag_contexts": [profiles],
+    }
+
+if __name__ == "__main__":
     
-    keywords = model.invoke([prompt])
-    
-    try:
-        profile = search_stock_profile.invoke(keywords.content)
-        return {
-            "stock_profile": profile or []
-            # "messages": state.get("messages", []) + [
-            #     SystemMessage(content=f"已获取 {len(profile) if isinstance(profile, list) else 0} 个股票画像")
-            # ]
-        }
-    except Exception as e:
-        return {"stock_profile": [], "errors": state.get("errors", []) + [str(e)] }
+    state = AgentState()
+    state["user_question"] = "国内AI应用前景如何，有什么投资建议，最好能帮我发现下半年最有可能暴增的冷门潜力股，而不是给我大家都知道的龙头股？"
+    print(profile_node(state).get("stock_profile"))

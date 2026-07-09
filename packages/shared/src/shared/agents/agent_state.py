@@ -9,7 +9,7 @@ class AgentState(TypedDict):
     reflections:    List[str]
     final_answer:   str
     human_feedback: str
-    rag_contexts:   List[str]      # Researcher 收集的检索内容，供 RAGAS 使用
+    rag_contexts: Annotated[List[str], operator.add] = []
     ragas_result:   Optional[dict] # 最新一次 RAGAS 评估结果
     user_question:  str
     retry_count:     int
@@ -24,3 +24,4 @@ class AgentState(TypedDict):
     errors: List[str] = []
     confidence: float = 0.0
     news_analysis: str
+    markdown: str

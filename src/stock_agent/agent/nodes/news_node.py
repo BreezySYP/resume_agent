@@ -1,5 +1,5 @@
 from typing import Any, Dict
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
 from shared.agents.agent_state import AgentState
 from shared.models.deepseek import get_deepseek
 from agent.tools import search_news, tav_search, time_tool
@@ -37,7 +37,15 @@ def news_node(state: AgentState) -> Dict[str, Any]:
     
     result = agent.invoke({"messages": [HumanMessage(content=state["user_question"])]})
     
+    tool_outputs = []
+    for msg in result["messages"]:
+        if isinstance(msg, ToolMessage):
+            tool_outputs.append(msg.content)
+        elif isinstance(msg, AIMessage) and msg.tool_calls:
+            for call in msg.tool_calls:
+                tool_outputs.append(f"Tool {call['name']} called with {call['args']}")
+
     return {
-        "news_analysis": result["messages"][-1].content
-        # "messages": state.get("messages", []) + result["messages"]
+        "news_analysis": result["messages"][-1].content,
+        "rag_contexts": tool_outputs
     }

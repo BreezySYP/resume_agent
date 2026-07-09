@@ -139,23 +139,29 @@ FINANCIAL_FACTOR_EXPLAIN = """
     财务频率：每年3、6、9、12月有财报数据，其他月份可能为缺失值
 """
 
+
 def fundamental_node(state: AgentState) -> Dict[str, Any]:
     """基本面 - 纯数据节点"""
     if not state.get("stock_profile"):
         return {"stock_financial_factor": []}
-    
-    try:
-        codes = [add_prefix(p["code"]) for p in state["stock_profile"]]
-        sql = f"""
-            SELECT t.* FROM financial_factor t
-            JOIN (
-                SELECT code, MAX(report_date) AS max_date 
-                FROM financial_factor 
-                WHERE code IN ({str(codes)[1:-1]}) 
-                GROUP BY code
-            ) latest ON t.code = latest.code AND t.report_date = latest.max_date;
-        """
-        df = pd.read_sql(sql, engine.connect()).round(2)
-        return {"stock_financial_factor": df.to_dict(orient="records")}
-    except Exception as e:
-        return {"stock_financial_factor": [], "error": str(e)}
+
+    codes = [add_prefix(p["code"]) for p in state["stock_profile"]]
+    # sql = f"""
+    #     SELECT t.* FROM financial_factor t
+    #     JOIN (
+    #         SELECT code, MAX(report_date) AS max_date 
+    #         FROM financial_factor 
+    #         WHERE code IN ({str(codes)[1:-1]}) 
+    #         GROUP BY code
+    #     ) latest ON t.code = latest.code AND t.report_date = latest.max_date;
+    # """
+
+    sql = f"""
+        SELECT t.* FROM financial_factor t WHERE code IN ({str(codes)[1:-1]})  and report_date > '2023-01-01';
+    """
+    df = pd.read_sql(sql, engine.connect()).round(2)
+    result = df.to_dict(orient="records")
+    return {
+        "stock_financial_factor": result,
+        "rag_contexts": [result]
+    }

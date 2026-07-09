@@ -2,13 +2,15 @@
 import functools
 import hashlib
 import io
-
+import json
+from functools import wraps
 import pandas as pd
 from loguru import logger
 from redis import Redis
 from shared.configs.settings import REDIS_URL
+import inspect
 
-r = Redis.from_url(REDIS_URL)
+redis_client = Redis.from_url(REDIS_URL)
 
 
 def _default_key(func, *args, **kwargs) -> str:
@@ -23,7 +25,7 @@ def redis_cache_df_parquet(expire_seconds: int = 172800, key_generator=_default_
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             key = key_generator(func, *args, **kwargs)
-            cached = r.get(key)
+            cached = redis_client.get(key)
             if cached:
                 try:
                     return pd.read_parquet(io.BytesIO(cached))
@@ -34,7 +36,54 @@ def redis_cache_df_parquet(expire_seconds: int = 172800, key_generator=_default_
                 buf = io.BytesIO()
                 result.to_parquet(buf, index=False)
                 buf.seek(0)
-                r.setex(key, expire_seconds, buf.read())
+                redis_client.setex(key, expire_seconds, buf.read())
             return result
         return wrapper
     return decorator
+
+import inspect
+import json
+from functools import wraps
+
+def redis_cache(prefix: str, key: str, ttl: int = 1800):
+    def decorator(func):
+        sig = inspect.signature(func)
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            bound = sig.bind(*args, **kwargs)
+            bound.apply_defaults()
+
+            params = {
+                k: v
+                for k, v in bound.arguments.items()
+                if k not in ("db", "session")
+            }
+
+            cache_key = f"{prefix}:{key.format(**params)}"
+
+            cache = redis_client.get(cache_key)
+            if cache is not None:
+                return json.loads(cache)
+
+            result = func(*args, **kwargs)
+            redis_client.setex(
+                cache_key,
+                ttl,
+                json.dumps(result, ensure_ascii=False, default=str),
+            )
+            # logger.trace("set redis key for {}", cache_key)
+
+            return result
+
+        return wrapper
+
+    return decorator
+
+def delete(key: str):
+    redis_client.delete(key)
+
+
+def delete_pattern(pattern: str):
+    for key in redis_client.scan_iter(pattern):
+        redis_client.delete(key)

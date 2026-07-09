@@ -50,6 +50,6 @@ def synthesizer_node(state: AgentState) -> Dict[str, Any]:
     recommendation: InvestmentRecommendation = structured_llm.invoke([SystemMessage(content=final_prompt)])
     
     return {
-        "final_answer": recommendation["markdown_report"]          # 完整结构化对象
-        # "messages": state.get("messages", []) + [SystemMessage(content=recommendation["markdown_report"])]
+        "final_answer": recommendation["markdown_report"],
+        "messages": [SystemMessage(content=str(recommendation))]
     }

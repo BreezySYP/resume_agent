@@ -1,10 +1,11 @@
 """services/stock_service.py — 股票数据查询"""
 from __future__ import annotations
+import json
 from typing import List, Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from loguru import logger
-
+from shared.db.redis_cache import redis_cache, redis_client
 
 STOCK_STEPS = ["history", "financial_statement", "profile", "news", "technical"]
 
@@ -19,34 +20,54 @@ def _make_links(code: str, name: str) -> dict:
     }
 
 
+@redis_cache(
+    prefix="stock_list",
+    key="{page}:{page_size}:{keyword}",
+    ttl=1800,
+)
 def get_stock_list(db: Session, page: int = 1, page_size: int = 50, keyword: str = "") -> dict:
     """
     从 history 表 distinct 获取股票列表，附带最新收盘价和各 step 最新状态。
     """
     offset = (page - 1) * page_size
 
-    # 基础列表
-    where = "WHERE CAST(code AS CHAR) LIKE :kw OR name LIKE :kw" if keyword else ""
-    kw    = f"%{keyword}%"
-    count_sql = text(f"""
-        SELECT COUNT(DISTINCT code) FROM history {where}
-    """)
-    list_sql = text(f"""
+    # # 基础列表
+    # where = "WHERE CAST(code AS CHAR) LIKE :kw OR name LIKE :kw" if keyword else ""
+    # kw    = f"%{keyword}%"
+    # count_sql = text(f"""
+    #     SELECT COUNT(DISTINCT code) FROM history {where}
+    # """)
+    # list_sql = text(f"""
+    #     SELECT
+    #         CAST(h.code AS CHAR)  AS code,
+    #         MAX(CAST(h.name AS CHAR)) AS name,
+    #         MAX(h.close) OVER (PARTITION BY h.code ORDER BY h.date DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS latest_close,
+    #         MAX(h.date)  AS latest_date
+    #     FROM history h
+    #     {where}
+    #     GROUP BY h.code
+    #     ORDER BY h.code
+    #     LIMIT :limit OFFSET :offset
+    # """)
+    count_sql = text("SELECT COUNT(DISTINCT code) FROM history")
+    list_sql = text("""
         SELECT
-            CAST(h.code AS CHAR)  AS code,
-            MAX(CAST(h.name AS CHAR)) AS name,
-            MAX(h.close) OVER (PARTITION BY h.code ORDER BY h.date DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS latest_close,
-            MAX(h.date)  AS latest_date
+            h.code,
+            h.name,
+            h.close AS latest_close,
+            h.date AS latest_date
         FROM history h
-        {where}
-        GROUP BY h.code
+        LEFT JOIN history h2
+            ON h.code = h2.code
+        AND h.date < h2.date
+        WHERE h2.code IS NULL
         ORDER BY h.code
-        LIMIT :limit OFFSET :offset
-    """)
+        LIMIT :limit OFFSET :offset;
+        """)
 
     params = {"limit": page_size, "offset": offset}
-    if keyword:
-        params["kw"] = kw
+    # if keyword:
+    #     params["kw"] = kw
 
     with db as session:
         total  = session.execute(count_sql, params).scalar() or 0
@@ -68,31 +89,23 @@ def get_stock_list(db: Session, page: int = 1, page_size: int = 50, keyword: str
 
     return {"total": total, "page": page, "page_size": page_size, "items": stocks}
 
-
+@redis_cache(
+    prefix="stock_code_status",
+    key="{code}",
+    ttl=1800,
+)
 def _get_step_status_for_code(db: Session, code: str) -> dict:
     """查询单股各 step 最新状态"""
     sql = text("""
-        SELECT step, status, finished_at, row_count, error_msg
-        FROM etl_job_log
+        SELECT code, step, completed_at
+        FROM etl_code_checkpoint
         WHERE code = :code
-          AND id IN (
-              SELECT MAX(id) FROM etl_job_log WHERE code = :code GROUP BY step
-          )
     """)
     rows   = db.execute(sql, {"code": code}).fetchall()
     result = {}
     for r in rows:
-        result[r[0]] = {
-            "step":         r[0],
-            "status":       r[1],
-            "last_success": r[2],
-            "row_count":    r[3] or 0,
-            "error_msg":    r[4],
-        }
-    # 补全没有记录的 step
-    for step in STOCK_STEPS:
-        if step not in result:
-            result[step] = {"step": step, "status": None, "last_success": None, "row_count": 0, "error_msg": None}
+        result[r[1]] = r[2]
+
     return result
 
 

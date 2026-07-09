@@ -8,7 +8,8 @@ from qdrant_client import models
 from qdrant_client.models import Prefetch, SparseVector
 from shared.db.mysql import engine
 from shared.db.qdrant import get_qdrant_client
-from shared.models.ollama_models import get_embedding
+from shared.models.ollama_models import get_embedding 
+from service.cuda_service import rerank
 
 
 @lru_cache(maxsize=1)
@@ -55,8 +56,6 @@ def search_hybrid(collection: str, table: str, query: str, top_k: int = 5) -> pd
 
 def search_with_rerank(query: str, collection: str, table: str, build_text, top_k: int = 5) -> pd.DataFrame:
     """混合召回 top 100 -> rerank -> 取最终 top_k"""
-    from service.cuda_service import rerank
-
     results = search_hybrid(collection, table, query, top_k=100)
     scores = rerank(query=query, docs=[build_text(row) for _, row in results.iterrows()])
     results["rerank_score"] = scores["rerank_score"]

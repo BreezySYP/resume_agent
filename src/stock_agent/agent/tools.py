@@ -122,7 +122,7 @@ def search_stock_profile(query: str):
     """根据用户的提问中提取出领域，作为query查找相对应的股票"""
     return search_similar.search_with_rerank(
         query, "stock_profile_hybrid", "stock_profile", build_stock_profile_text, 20
-    ).drop(columns=["scope"]).to_dict(orient="records")
+    )
 
 
 @tool
