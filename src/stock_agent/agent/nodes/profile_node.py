@@ -9,6 +9,7 @@ from langchain_core.messages import (AIMessage, HumanMessage, SystemMessage,
                                      ToolMessage)
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
+from event.decorator import node
 from service.cuda_service import rerank
 from shared.agents.agent_state import AgentState
 from shared.models.deepseek import get_deepseek
@@ -19,13 +20,12 @@ from loguru import logger
 MAX_ITER = 3
 
 
-class 
-
 class SearchPlan(BaseModel):
     finished: bool = Field(description="是否已经覆盖行业，可以结束搜索")
     keywords: list[str] = Field(description="下一轮搜索关键词")
     reason: str = Field(description="为什么生成这些关键词")
 
+@node(node_name="profile_node", title="股票档案节点")
 def profile_node(state: AgentState):
 
     # 第一轮关键词
@@ -46,14 +46,6 @@ def profile_node(state: AgentState):
         }}
     """)
 
-    # from langchain.agents import create_agent
-
-    # agent = create_agent(
-    #     model= get_deepseek(),
-    #     tools=[tav_search],
-    #     system_prompt=SystemMessage(content=first_prompt)
-    # )
-
     model = get_deepseek()
     parser = JsonOutputParser(pydantic_object=SearchPlan)
     keywords = model.invoke([first_prompt]).content
@@ -70,7 +62,7 @@ def profile_node(state: AgentState):
             if kw in searched_keywords:
                 continue
             searched_keywords.add(kw)
-            docs = search_stock_profile.invoke(kw).to_dict(orient="records")
+            docs = search_stock_profile.invoke(kw)
             if not docs:
                 continue
             if isinstance(docs, dict):
@@ -136,11 +128,12 @@ def profile_node(state: AgentState):
     profiles["rerank_score"] = scores["rerank_score"]
     profiles = profiles.loc[profiles["rerank_score"].nlargest(20).index]
     profiles = profiles.drop(columns=["scope"])
+    profiles = profiles.to_dict(orient="records")
     logger.debug("finish profile node")
 
     return {
         "stock_profile": profiles,
-        "rag_contexts": [profiles],
+        "rag_contexts": [profiles]
     }
 
 if __name__ == "__main__":

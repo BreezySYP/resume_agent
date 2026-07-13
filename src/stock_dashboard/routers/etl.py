@@ -133,24 +133,24 @@ async def trigger_all(
     "/stream/{job_id}",
     summary="SSE 实时进度订阅",
     description="""
-通过 Server-Sent Events (SSE) 订阅指定任务的实时进度。
+            通过 Server-Sent Events (SSE) 订阅指定任务的实时进度。
 
-连接后会持续收到事件，直到任务完成或失败。
+            连接后会持续收到事件，直到任务完成或失败。
 
-事件格式：
-```json
-{
-  "job_id": 1,
-  "code": "600519",
-  "step": "history",
-  "status": "running|success|failed",
-  "message": "描述信息",
-  "progress": 0.5
-}
-```
-    """,
-    response_class=StreamingResponse,
-)
+            事件格式：
+            ```json
+            {
+            "job_id": 1,
+            "code": "600519",
+            "step": "history",
+            "status": "running|success|failed",
+            "message": "描述信息",
+            "progress": 0.5
+            }
+            ```
+        """,
+        response_class=StreamingResponse,
+    )
 async def stream_job(job_id: int):
     return StreamingResponse(
         sse_stream(job_id),

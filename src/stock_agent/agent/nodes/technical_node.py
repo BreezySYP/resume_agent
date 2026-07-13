@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 from pydantic import BaseModel, Field
+from event.decorator import node
 from shared.agents.agent_state import AgentState
 from shared.code_rule import  remove_prefix
 from shared.db.mysql import engine
@@ -126,26 +127,25 @@ TECHNICAL_EXPLAIN = f"""
     technical_rank	1 ~ N（N为当日股票数）	当日技术排名，1表示技术面最强
         """
 
+@node(node_name="technical_node", title="技术面数据节点")
 def technical_node(state: AgentState) -> Dict[str, Any]:
     """技术面 - 纯数据节点"""
     if not state.get("stock_profile"):
         return {"stock_technique_factor": []}
     
     codes = [int(remove_prefix(p["code"])) for p in state["stock_profile"]]
-    # sql = f"""
-    #     SELECT t.* FROM technical_factor t
-    #     JOIN (
-    #         SELECT code, MAX(date) AS max_date 
-    #         FROM technical_factor 
-    #         WHERE code IN ({str(codes)[1:-1]}) 
-    #         GROUP BY code
-    #     ) latest ON t.code = latest.code AND t.date = latest.max_date;
-    # """
     sql = f"""
-        SELECT t.* FROM technical_factor t WHERE code IN ({str(codes)[1:-1]})  and date > '2023-01-01';
+        SELECT t.* FROM technical_factor t
+        JOIN (
+            SELECT code, MAX(date) AS max_date 
+            FROM technical_factor 
+            WHERE code IN ({str(codes)[1:-1]}) 
+            GROUP BY code
+        ) latest ON t.code = latest.code AND t.date = latest.max_date;
     """
+    
     df = pd.read_sql(sql, engine.connect()).round(2)
-
+    df["date"] = df["date"].dt.strftime("%Y-%m-%d %H:%M:%S")
     result = df.to_dict(orient="records")
 
     return {

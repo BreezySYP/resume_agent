@@ -3,12 +3,13 @@ import datetime
 from zoneinfo import ZoneInfo
 
 import pandas as pd
-from core.minio_file import list_skills as _list_skills
-from core.minio_file import load_skill as _load_skill
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langchain_tavily import TavilySearch
 from loguru import logger
+
+from core.minio_file import list_skills as _list_skills
+from core.minio_file import load_skill as _load_skill
 from service import search_similar
 from shared.db.mysql import engine, execute_query, get_schema, get_tables
 from shared.models.deepseek import get_deepseek
@@ -114,15 +115,19 @@ def search_business_breakdown(stock_names: str):
     输出：
         字典类型包含某个企业在这个细分领域，在某个时间的经营情况
     """
-    return search_similar.search("stock_business_breakdown", "stock_business_breakdown", stock_names, 5)
+    result = search_similar.search("stock_business_breakdown", "stock_business_breakdown", stock_names, 5)
+    result["update_time"] = result["update_time"].dt.strftime("%Y-%m-%d %H:%M:%S")
+    return result.to_dict(orient="records")
 
 
 @tool
 def search_stock_profile(query: str):
     """根据用户的提问中提取出领域，作为query查找相对应的股票"""
-    return search_similar.search_with_rerank(
+    result = search_similar.search_with_rerank(
         query, "stock_profile_hybrid", "stock_profile", build_stock_profile_text, 20
     )
+    result["update_time"] = result["update_time"].dt.strftime("%Y-%m-%d %H:%M:%S")
+    return result.to_dict(orient="records")
 
 
 @tool
@@ -133,9 +138,11 @@ def search_news(stock_names: str):
     输出：
         返回关于这个题材或领域里相关的新闻或者所设计的企业的公告
     """
-    return search_similar.search_with_rerank(
+    result =  search_similar.search_with_rerank(
         stock_names, "stock_news_hybrid", "stock_news", build_stock_news_text, 20
-    ).to_dict(orient="records")
+    )
+    result["date"] = result["date"].dt.strftime("%Y-%m-%d %H:%M:%S")
+    return result.to_dict(orient="records")
 
 
 @tool
@@ -145,6 +152,7 @@ def stock_financial_analysis(code: str):
     WHERE total_financial_rank IS NOT NULL
     ORDER BY total_financial_rank ASC LIMIT 1000;"""
     df = pd.read_sql(sql, con=engine.connect())
+    df["report_date"] = df["report_date"].dt.strftime("%Y-%m-%d %H:%M:%S")
     return df.to_dict(orient="records")
 
 
@@ -155,6 +163,7 @@ def stock_technical_analysis(query: str):
     WHERE date IS NOT NULL AND date > '2025-01-01' AND total_technical_score IS NOT NULL
     ORDER BY total_technical_score DESC LIMIT 1000;"""
     df = pd.read_sql(sql, con=engine.connect())
+    df["date"] = df["date"].dt.strftime("%Y-%m-%d %H:%M:%S")
     return df.to_dict(orient="records")
 
 

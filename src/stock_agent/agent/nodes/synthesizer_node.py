@@ -2,11 +2,12 @@
 from typing import Any, Dict
 from pydantic import BaseModel, Field
 from langchain_core.messages import HumanMessage, SystemMessage
+from event.decorator import node
 from shared.agents.agent_state import AgentState
 from shared.models.deepseek import get_deepseek
 from langchain_core.output_parsers import JsonOutputParser
-from nodes.technical_node import TECHNICAL_EXPLAIN
-from nodes.fundamental_node import FINANCIAL_FACTOR_EXPLAIN
+from agent.nodes.technical_node import TECHNICAL_EXPLAIN
+from agent.nodes.fundamental_node import FINANCIAL_FACTOR_EXPLAIN
 
 class InvestmentRecommendation(BaseModel):
     markdown_report: str = Field(..., description="给用户看的完整详尽的 Markdown 报告")
@@ -17,6 +18,7 @@ class InvestmentRecommendation(BaseModel):
     confidence_score: float = Field(..., ge=0, le=1)
     suggested_stocks: list[str] = Field(...)
 
+@node(node_name="synthesizer_node", title="综合分析节点")
 def synthesizer_node(state: AgentState) -> Dict[str, Any]:
     llm = get_deepseek(temperature=0.1)
     
@@ -35,7 +37,7 @@ def synthesizer_node(state: AgentState) -> Dict[str, Any]:
 
         严格按照以下 JSON Schema 输出：
         {InvestmentRecommendation.model_json_schema()}
-        """
+    """
 
     # 使用结构化输出
     structured_llm = llm | JsonOutputParser(pydantic_object=InvestmentRecommendation)

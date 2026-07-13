@@ -45,5 +45,7 @@ tests/
 .devcontainer
 
 
+*.pckl
+
 
 

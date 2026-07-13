@@ -16,7 +16,9 @@ def error_handler_middleware(node_func):
             
             # 记录错误到 state
             return {
-                "errors": state.get("errors", []) + [error_msg],
-                "messages": state.get("messages", []) + [SystemMessage(content=f"错误: {str(e)}")]
+                "errors": [error_msg],
+                "messages": [SystemMessage(content=f"错误: {str(e)}")],
+                "status": "partly error",
+                "current_node": node_func.__name__
             }
     return wrapper

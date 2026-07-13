@@ -1,11 +1,8 @@
 """src/stock_agent/agent/graph.py"""
-from langgraph.checkpoint.memory import MemorySaver
+
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import RetryPolicy
-
 from agent.error_handler import error_handler_middleware
-from shared.agents.agent_state import AgentState
-
 # 导入所有 node 函数
 from agent.nodes.supervisor_node import supervisor_node
 from agent.nodes.profile_node import profile_node
@@ -14,6 +11,8 @@ from agent.nodes.technical_node import technical_node
 from agent.nodes.news_node import news_node
 from agent.nodes.synthesizer_node import synthesizer_node
 from agent.nodes.reflection_node import reflection_node
+from shared.agents.agent_state import AgentState
+from shared.agents.checkpoint import get_redis_checkpointer
 
 
 def build_investment_agent(checkpointer=None):
@@ -66,7 +65,7 @@ def build_investment_agent(checkpointer=None):
     )
 
     return workflow.compile(
-        checkpointer=checkpointer or MemorySaver()
+        checkpointer=checkpointer
     )
 
 
@@ -77,14 +76,18 @@ def ask_investment(question: str, thread_id: str = "default"):
         "recursion_limit": 50,          # 防止无限循环
     }
     
-    agent = build_investment_agent()
-    result = agent.invoke({"user_question": question}, config=config)
+    with get_redis_checkpointer() as cp:
+        cp.setup()
+        agent = build_investment_agent(checkpointer=cp)
+        result = agent.invoke({"user_question": question, "thread_id": thread_id}, config=config)
+    
+
     
     return result
 
-if __name__ == "__main__":
-    result = ask_investment("国内AI应用前景如何，有什么投资建议，最好能帮我发现下半年最有可能暴增的冷门潜力股，而不是给我大家都知道的龙头股？")
 
+if __name__ == "__main__":
+    result = ask_investment("国内AI应用前景如何，有什么投资建议，最好能帮我发现下半年最有可能暴增的冷门潜力股，而不是给我大家都知道的龙头股？", "default")
     print(result.get("final_answer"))
     print(result["messages"][-1].content)
 

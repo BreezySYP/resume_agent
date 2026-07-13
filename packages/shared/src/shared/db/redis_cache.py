@@ -9,9 +9,12 @@ from loguru import logger
 from redis import Redis
 from shared.configs.settings import REDIS_URL
 import inspect
+from redis.asyncio import Redis as aRedis
 
 redis_client = Redis.from_url(REDIS_URL)
 
+async def async_redis_client():
+    return await aRedis.from_url(REDIS_URL)
 
 def _default_key(func, *args, **kwargs) -> str:
     content = (func.__module__, func.__name__, args, tuple(sorted(kwargs.items())))

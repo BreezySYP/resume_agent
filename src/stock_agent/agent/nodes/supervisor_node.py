@@ -1,8 +1,10 @@
+
 from typing import Any, Dict
 from pydantic import BaseModel, Field
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.output_parsers import JsonOutputParser
 from agent.tools import time_tool
+from event.decorator import node
 from shared.agents.agent_state import AgentState
 from shared.models.deepseek import get_deepseek
 
@@ -11,6 +13,7 @@ class AnalysisPlan(BaseModel):
     plan_summary: str = Field(...)
     focus_areas: list[str] = Field(...)  # ["fundamental", "technical", "news"]
 
+@node(node_name="supervisor_node", title="监督节点")
 def supervisor_node(state: AgentState) -> Dict[str, Any]:
     currtime = time_tool.invoke("")
     
@@ -24,7 +27,7 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
 
         请严格按照以下 JSON 格式输出：
         {AnalysisPlan.model_json_schema()}
-        """)
+    """)
 
     model = get_deepseek(temperature=0.1)
     parser = JsonOutputParser(pydantic_object=AnalysisPlan)
