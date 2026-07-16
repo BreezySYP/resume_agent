@@ -23,6 +23,15 @@ class EventManager:
             "node": node,
         })
 
+    def graph_finish(self, thread_id: str, node: str, message: str):
+        self.emit(thread_id, {
+            "type": "node",
+            "status": "done",
+            "node": node,
+            "done": True,
+            "message": message
+        })
+
     def node_error(self, thread_id: str, node: str, error: str):
         self.emit(thread_id, {
             "type": "node",

@@ -18,7 +18,7 @@ class InvestmentRecommendation(BaseModel):
     confidence_score: float = Field(..., ge=0, le=1)
     suggested_stocks: list[str] = Field(...)
 
-@node(node_name="synthesizer_node", title="综合分析节点")
+@node(node_name="synthesizer", title="综合分析节点")
 def synthesizer_node(state: AgentState) -> Dict[str, Any]:
     llm = get_deepseek(temperature=0.1)
     

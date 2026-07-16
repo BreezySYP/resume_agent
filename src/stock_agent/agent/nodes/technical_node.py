@@ -127,7 +127,7 @@ TECHNICAL_EXPLAIN = f"""
     technical_rank	1 ~ N（N为当日股票数）	当日技术排名，1表示技术面最强
         """
 
-@node(node_name="technical_node", title="技术面数据节点")
+@node(node_name="technical", title="技术面数据节点")
 def technical_node(state: AgentState) -> Dict[str, Any]:
     """技术面 - 纯数据节点"""
     if not state.get("stock_profile"):

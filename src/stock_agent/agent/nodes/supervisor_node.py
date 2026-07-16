@@ -13,7 +13,7 @@ class AnalysisPlan(BaseModel):
     plan_summary: str = Field(...)
     focus_areas: list[str] = Field(...)  # ["fundamental", "technical", "news"]
 
-@node(node_name="supervisor_node", title="监督节点")
+@node(node_name="supervisor", title="监督节点")
 def supervisor_node(state: AgentState) -> Dict[str, Any]:
     currtime = time_tool.invoke("")
     

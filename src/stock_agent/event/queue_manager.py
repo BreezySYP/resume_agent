@@ -29,8 +29,8 @@ async def sse_stream(thread_id: str) -> AsyncGenerator[str, None]:
     while True:
         event = pop_event(thread_id=thread_id)
         if event is None:
-            yield f"data: {json.dumps({'done': True})}\n\n"
-            break
+            await asyncio.sleep(1)  # 队列为空时，稍作等待
+            continue
         yield f"data: {json.dumps(event, default=str)}\n\n"
 
 ## 2026-07-12 13:43:11.475 | DEBUG    | event.queue_manager:push_event:16 - push_event result: 26

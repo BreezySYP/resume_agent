@@ -5,7 +5,7 @@ from shared.models.deepseek import get_deepseek
 from agent.tools import search_news, tav_search, time_tool
 from event.decorator import node
 
-@node(node_name="news_node", title="新闻数据节点")
+@node(node_name="news", title="新闻数据节点")
 def news_node(state: AgentState) -> Dict[str, Any]:
     if not state.get("stock_profile"):
         return {"news_analysis": "No stock profile available."}

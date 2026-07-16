@@ -14,8 +14,10 @@ from agent.nodes.reflection_node import reflection_node
 from shared.agents.agent_state import AgentState
 from shared.agents.checkpoint import get_redis_checkpointer
 
+from event.event_manager import event
 
-def build_investment_agent(checkpointer=None):
+
+def build_investment_agent(checkpointer=None, thread_id="default"):
     """生产级 Graph 构建函数"""
     workflow = StateGraph(AgentState)
     
@@ -51,6 +53,7 @@ def build_investment_agent(checkpointer=None):
         retry_count = state.get("retry_count", 0)
         
         if retry_count >= 3 or "PASS" in last_reflection:
+            event.graph_finish(thread_id, "END", state.get("final_answer", "获取最终答案失败，请查询日志"))
             return END   # 直接结束，不再回 synthesizer
         
         return "synthesizer"
@@ -78,19 +81,24 @@ def ask_investment(question: str, thread_id: str = "default"):
     
     with get_redis_checkpointer() as cp:
         cp.setup()
-        agent = build_investment_agent(checkpointer=cp)
+        agent = build_investment_agent(checkpointer=cp, thread_id=thread_id)
         result = agent.invoke({"user_question": question, "thread_id": thread_id}, config=config)
-    
-
     
     return result
 
 
+
 if __name__ == "__main__":
-    result = ask_investment("国内AI应用前景如何，有什么投资建议，最好能帮我发现下半年最有可能暴增的冷门潜力股，而不是给我大家都知道的龙头股？", "default")
+    result = ask_investment("兆易创新已经让我总资产跌了快30%我现在是重仓，接下来该怎么办？", "debug")
+    
     print(result.get("final_answer"))
     print(result["messages"][-1].content)
-
+    from event.queue_manager import pop_event
+    while True:
+        event = pop_event("debug")
+        if not event:
+            break
+        print(event)
     # from langsmith import evaluate, Client
     # client = Client()
     # def target(inputs: dict):

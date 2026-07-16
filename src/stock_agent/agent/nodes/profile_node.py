@@ -25,7 +25,7 @@ class SearchPlan(BaseModel):
     keywords: list[str] = Field(description="下一轮搜索关键词")
     reason: str = Field(description="为什么生成这些关键词")
 
-@node(node_name="profile_node", title="股票档案节点")
+@node(node_name="profile", title="股票档案节点")
 def profile_node(state: AgentState):
 
     # 第一轮关键词

@@ -140,7 +140,7 @@ FINANCIAL_FACTOR_EXPLAIN = """
     财务频率：每年3、6、9、12月有财报数据，其他月份可能为缺失值
 """
 
-@node(node_name="fundamental_node", title="基本面数据节点")
+@node(node_name="fundamental", title="基本面数据节点")
 def fundamental_node(state: AgentState) -> Dict[str, Any]:
     """基本面 - 纯数据节点"""
     if not state.get("stock_profile"):

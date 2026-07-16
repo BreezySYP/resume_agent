@@ -33,6 +33,7 @@ def normalize(obj):
 
     return obj
 
+
 def node(node_name: str, title: str):
 
     def decorator(func):
@@ -59,8 +60,6 @@ def node(node_name: str, title: str):
                     str(e),
                 )
                 raise
-            
+
         return wrapper
     return decorator
-
-        

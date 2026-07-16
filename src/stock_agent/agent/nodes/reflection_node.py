@@ -4,7 +4,7 @@ from shared.agents.agent_state import AgentState
 from shared.models.deepseek import get_deepseek
 from langchain_core.messages import SystemMessage
 
-@node(node_name="reflection_node", title="反射节点")
+@node(node_name="reflection", title="反射节点")
 def reflection_node(state: AgentState) -> Dict[str, Any]:
     """Reflection：让模型自我审视输出质量"""
 

@@ -10,6 +10,10 @@ class TriggerAgentReponse(BaseModel):
     thread_id: str
     message: str
 
+class TriggerAgentRequest(BaseModel):
+    thread_id: str
+    question: str
+
 
 @router.post(
     "/qa",
@@ -20,13 +24,12 @@ class TriggerAgentReponse(BaseModel):
     """
 )
 async def triggerAgent(
-    question: str,
+    qa: TriggerAgentRequest,
     background: BackgroundTasks
 ):
-    thread_id = "qa_from_api"
-    background.add_task(ask_investment, question, thread_id)
+    background.add_task(ask_investment, qa.question, qa.thread_id)
     return TriggerAgentReponse(
-        thread_id=thread_id,
+        thread_id=qa.thread_id,
         message="ai stock agent is triggered for the question"
     )
 
