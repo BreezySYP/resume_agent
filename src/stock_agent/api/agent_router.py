@@ -2,7 +2,7 @@ from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from agent.graph import ask_investment
-from event.queue_manager import sse_stream
+from shared.db.redis import sse_stream
 
 router = APIRouter(prefix="/api/ai", tags=["AI tasks"])
 

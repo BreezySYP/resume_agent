@@ -8,15 +8,15 @@ from router import etl_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 启动 Stock Dashboard API")
+    logger.info("🚀 启动 Stock ETL API")
     # init_db()
     logger.info("✅ 数据库表检查完成")
     yield
-    logger.info("👋 Stock Dashboard API 关闭")
+    logger.info("👋 Stock ETL API 关闭")
 
 
 app = FastAPI(
-    title="Stock ETL Dashboard API",
+    title="Stock ETL API",
     description="""
         A股数据 ETL 管理后台 API。
 

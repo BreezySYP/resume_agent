@@ -8,27 +8,22 @@ from routers import stocks, etl, status
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 启动 Stock Dashboard API")
+    logger.info("🚀 启动 Stock agent API")
     # init_db()
     logger.info("✅ 数据库表检查完成")
     yield
-    logger.info("👋 Stock Dashboard API 关闭")
+    logger.info("👋 Stock agent API 关闭")
 
 
 app = FastAPI(
-    title="Stock Dashboard API",
+    title="Stock agent API",
     description="""
 A股数据 ETL 管理后台 API。
 
 ## 功能模块
 
-- **股票数据**：查看股票列表、单股详情（K线/新闻/财务/简介）
-- **ETL 任务**：触发单股或全量数据下载，SSE 实时进度推送
-- **ETL 状态**：查看 checkpoint 断点状态、任务执行历史
+- 股票投资相关问题解答
 
-## 数据来源
-
-底层复用 `stock_etl` 项目的 pipeline，通过 akshare / tushare 等包采集数据。
     """,
     version="0.1.0",
     lifespan=lifespan,

@@ -4,9 +4,11 @@ import hashlib
 import io
 import json
 from functools import wraps
+from typing import AsyncGenerator
 import pandas as pd
 from loguru import logger
 from redis import Redis
+from redis import asyncio
 from shared.configs.settings import REDIS_URL
 import inspect
 from redis.asyncio import Redis as aRedis
@@ -90,3 +92,27 @@ def delete(key: str):
 def delete_pattern(pattern: str):
     for key in redis_client.scan_iter(pattern):
         redis_client.delete(key)
+
+
+def push_queue( id: str, event: dict, prefix: str = "queue"):
+    # 直接使用异步 Redis，不需要 run_coroutine_threadsafe
+    result = redis_client.rpush(
+        f"{prefix}:{id}",
+        json.dumps(event)
+    )
+    logger.debug(f"push queue result: {result}")
+
+def pop_queue(id: str, prefix: str = "queue"):
+    data = redis_client.lpop(f"{prefix}:{id}")
+    return json.loads(data) if data else None
+
+async def sse_stream(id: str, prefix: str = "queue") -> AsyncGenerator[str, None]:
+    """SSE 生成器：监听指定 job 的事件队列"""
+    import json
+
+    while True:
+        event = pop_queue(id=id, prefix=prefix)
+        if event is None:
+            await asyncio.sleep(1)  # 队列为空时，稍作等待
+            continue
+        yield f"data: {json.dumps(event, default=str)}\n\n"

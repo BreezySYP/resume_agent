@@ -186,6 +186,7 @@ def run_financial_factor_step() -> None:
 
 # ── pipeline ───────────────────────────────────────────────────────────────────
 
+
 CODE_BY_CODE_STEPS = {
     "history":               run_history_step,
     "financial_statement":   run_financial_statement_step,
@@ -201,11 +202,11 @@ ALL_TOGETHER_STEPS = {
     "composite":             run_composite_step,
 }
 
-DEFAULT_DAILY_STEPS = ["history", "technical", "capital_hot", "news", "qdrant_news_sync"]
-DEFAULT_SEASON_STEPS = ["history", "technical", "financial_statement", "financial_feature",
-                         "financial_factor", "composite", "capital_hot", "profile", "news", "qdrant_profile_sync", "qdrant_news_sync"]
 
 def get_codes():
+    """
+        返回所有a股 [(code, name)] 列表
+    """
     code_names = {r["code"]: r["name"] for r in history.get_all_codes().to_dict("records")}
     df_checkpoint = pd.read_sql("SELECT * FROM etl_code_checkpoint", con=engine.connect())
     code_group = df_checkpoint.groupby("code")
@@ -239,62 +240,32 @@ def get_codes():
     return result
 
 
-def run_code_pipeline(code, steps: list[str]) -> None:
+def run_code_pipeline(code:str, step: str) -> bool:
     name = get_name(code)
-    for step in steps:
-            start_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            if step not in CODE_BY_CODE_STEPS:
-                logger.warning("跳过未知 step: {}", step)
-                continue
-            if code_checkpoint.is_completed_today(code, step):
-                logger.info("⏭️  skip {} {} (今天已完成)", code, step)
-                continue
-            logger.info("=== start: {} ===", step)
-            try:
-                CODE_BY_CODE_STEPS[step](code, name, start_at)
-            except Exception as e:
-                logger.error("❌ {} 失败: {}，下次从断点继续", step, e)
-                raise
-            code_checkpoint.save_checkpoint(code, step, start_at)
-            logger.success("=== done: {} for code {} name {} ===", step, code, name)
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    last_complete = code_checkpoint.get_completed_at(code, step)
+    if step not in CODE_BY_CODE_STEPS:
+        logger.warning("跳过未知 step: {}", step)
+        return False
+    if code_checkpoint.is_completed_today(code, step):
+        logger.info("⏭️  skip {} {} (今天已完成)", code, step)
+        return False
+    logger.info("=== start: {} ===", step)
+    try:
+        CODE_BY_CODE_STEPS[step](code, name, last_complete)
+    except Exception as e:
+        logger.error("❌ {} 失败: {}，下次从断点继续", step, e)
+        return False 
+    code_checkpoint.save_checkpoint(code, step, now)
+    logger.success("=== done: {} for code {} name {} ===", step, code, name)
+    return True
 
-
-def run_pipeline(steps: list[str]) -> None:
-    
-    for code, name in get_codes():
-        for step in steps:
-            start_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            if step not in CODE_BY_CODE_STEPS:
-                logger.warning("跳过未知 step: {}", step)
-                continue
-            if code_checkpoint.is_completed_today(code, step):
-                logger.info("⏭️  skip {} {} (今天已完成)", code, step)
-                continue
-            logger.info("=== start: {} ===", step)
-            try:
-                CODE_BY_CODE_STEPS[step](code, name, start_at)
-            except Exception as e:
-                logger.error("❌ {} 失败: {}，下次从断点继续", step, e)
-                raise
-            code_checkpoint.save_checkpoint(code, step, start_at)
-            logger.success("=== done: {} for code {} name {} ===", step, code, name)
 
 def get_name(code: str):
     with engine.begin() as db:
         query = db.execute(text("SELECT name FROM history WHERE code = :code"), {"code": code})
         result = query.fetchone()
         return result[0]
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Stock ETL pipeline")
-    parser.add_argument(
-        "--steps", default=",".join(DEFAULT_DAILY_STEPS),
-        help=f"逗号分隔，可选: {','.join(STEPS)} 或 all",
-    )
-    args = parser.parse_args()
-    steps = list(CODE_BY_CODE_STEPS) if args.steps == "all" else [s.strip() for s in args.steps.split(",") if s.strip()]
-    run_pipeline(steps)
-
 
 if __name__ == "__main__":
     # main()

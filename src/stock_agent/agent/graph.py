@@ -93,9 +93,9 @@ if __name__ == "__main__":
     
     print(result.get("final_answer"))
     print(result["messages"][-1].content)
-    from event.queue_manager import pop_event
+    from shared.db.redis import pop_queue
     while True:
-        event = pop_event("debug")
+        event = pop_queue("debug")
         if not event:
             break
         print(event)

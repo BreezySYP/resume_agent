@@ -174,14 +174,3 @@ def get_job_logs(db: Session, code: str = None,
 
 PER_STOCK_STEPS = ["history", "profile", "news"]
 
-import requests
-
-url = "http://host.docker.internal:8011/api/etl/trigger/stock"
-
-def trigger_stock_etl(code:str, steps: List[str]):
-    response = requests.post(url, json={"code": code, "steps": steps})
-    if response.status_code == 200:
-        return "OK"
-
-if __name__ == "__main__":
-    print(trigger_stock_etl("000004", ["profile", "news"]))

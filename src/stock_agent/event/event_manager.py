@@ -1,12 +1,12 @@
 # shared/events/event_manager.py
 
-from event.queue_manager import push_event
+from shared.db.redis import push_queue
 
 
 class EventManager:
 
     def emit(self, thread_id: str, event: dict):
-        push_event(thread_id, event)
+        push_queue(thread_id, event)
 
     def node_start(self, thread_id: str, node: str, message: str):
         self.emit(thread_id, {

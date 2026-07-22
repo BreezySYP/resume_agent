@@ -7,7 +7,7 @@ import akshare as ak
 import pandas as pd
 from loguru import logger
 from shared.db.mysql import engine, get_connection
-from shared.db.redis_cache import redis_cache_df_parquet
+from shared.db.redis import redis_cache_df_parquet
 
 SINA_MAX_PAGE = 56
 BATCH_INTERVAL = 2

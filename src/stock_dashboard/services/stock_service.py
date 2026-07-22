@@ -5,7 +5,7 @@ from typing import List, Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from loguru import logger
-from shared.db.redis_cache import redis_cache, redis_client
+from shared.db.redis import redis_cache, redis_client
 
 STOCK_STEPS = ["history", "financial_statement", "profile", "news", "technical"]
 
