@@ -4,15 +4,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from api import agent_router
-
+from shared.configs.log_config import setup_logger
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 启动 Stock Dashboard API")
+    logger.info("🚀 启动 Stock Agent API")
     # init_db()
+    setup_logger()
     logger.info("✅ 数据库表检查完成")
     yield
-    logger.info("👋 Stock Dashboard API 关闭")
+    logger.info("👋 Stock Agent API 关闭")
 
 
 app = FastAPI(

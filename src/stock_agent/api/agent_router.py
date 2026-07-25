@@ -12,6 +12,7 @@ class TriggerAgentReponse(BaseModel):
 
 class TriggerAgentRequest(BaseModel):
     thread_id: str
+    job_id: str
     question: str
 
 
@@ -27,22 +28,22 @@ async def triggerAgent(
     qa: TriggerAgentRequest,
     background: BackgroundTasks
 ):
-    background.add_task(ask_investment, qa.question, qa.thread_id)
+    background.add_task(ask_investment,  qa.question, qa.job_id, qa.thread_id)
     return TriggerAgentReponse(
         thread_id=qa.thread_id,
         message="ai stock agent is triggered for the question"
     )
 
 @router.get(
-    "/qa/stream/{thread_id}",
+    "/qa/stream/{job_id}",
     summary="订阅ai agent的回答",
     description=f"""
         订阅ai agent的状态
     """
 )
-async def stream_agent(thread_id: str):
+async def stream_agent(job_id: str):
     return StreamingResponse(
-        sse_stream(thread_id),
+        sse_stream(job_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control":               "no-cache",

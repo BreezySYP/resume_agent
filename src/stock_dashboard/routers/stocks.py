@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from loguru import logger
 
 from shared.db.mysql import get_db
-from services.stock_service import (
+from service.stock_service import (
     get_stock_list,
     get_stock_detail,
     get_all_step_status,

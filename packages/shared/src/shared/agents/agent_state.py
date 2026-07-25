@@ -26,3 +26,4 @@ class AgentState(TypedDict):
     news_analysis: str
     markdown: str
     thread_id: str
+    job_id: str

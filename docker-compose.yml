@@ -130,7 +130,7 @@ services:
 
   minio:
     container_name: devagent-minio
-    image: minio/minio
+    image: minio/minio:latest
     command: server /data --console-address ":9001"
     ports:
       - "9000:9000"
@@ -170,8 +170,23 @@ services:
       - GF_FEATURE_TOGGLES_ENABLE=traceToMetrics
     volumes:
       - grafana_data:/var/lib/grafana
-      # - ./grafana/provisioning:/etc/grafana/provisioning   # 自动添加 Tempo 数据源（推荐）
-      
+      - ./grafana/provisioning:/etc/grafana/provisioning   # 自动添加 Tempo 数据源（推荐）
+    networks: [agent-net]
+
+  loki:
+    image: grafana/loki:latest
+    container_name: devagent-loki
+    ports:
+      - "3100:3100"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - ./loki-config.yaml:/etc/loki/local-config.yaml
+    depends_on:
+      - minio
     networks: [agent-net]
 # ── Volumes & Networks ────────────────────────────────────
 

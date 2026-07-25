@@ -4,12 +4,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from router import etl_router
+from shared.configs.log_config import setup_logger
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🚀 启动 Stock ETL API")
     # init_db()
+    setup_logger()
     logger.info("✅ 数据库表检查完成")
     yield
     logger.info("👋 Stock ETL API 关闭")

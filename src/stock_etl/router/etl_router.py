@@ -4,15 +4,15 @@ from typing import AsyncGenerator, List, Optional
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from constants import DAILY_STEPS, SEASON_STEPS, STEPS_META
-import pipeline_single_stock as pp
+from constants import DAILY_STEPS, SEASON_STEPS, STEPS_META, ETL_QUEUE_PREFIX
+from services.etl_service import run_all, push_event, run_code
 from shared.db.redis import sse_stream
 from uuid import uuid4
 
 router = APIRouter(prefix="/api/etl", tags=["ETL 任务"])
 
 class TriggerResponse(BaseModel):
-    # job_ids: List[int]
+    job_ids: list[str]
     message: str
 
 class TriggerAllRequest(BaseModel):
@@ -36,9 +36,16 @@ class TriggerStockRequest(BaseModel):
 
         触发后返回 job_ids，可通过 `/api/etl/stream/{{job_id}}` 订阅 SSE 实时进度。
     """)
-def trigger_stock_etl(req: TriggerStockRequest):
-    pp.run_code_pipeline(req.code, req.steps)
-    return TriggerResponse(message="Finished run steps for code")
+def trigger_stock_etl(
+    req: TriggerStockRequest,
+    background: BackgroundTasks 
+):
+    
+    job_id = str(uuid4())
+    run_code(job_id, req.code, req.steps)
+    
+    background.add_task(run_code, job_id, req.code, req.steps)
+    return TriggerResponse(job_ids=[job_id], message="Finished run steps for code")
 
 @router.get(
     "/steps",
@@ -81,7 +88,7 @@ def list_steps():
     )
 async def stream_job(job_id: int):
     return StreamingResponse(
-        sse_stream(job_id, ),
+        sse_stream(str(job_id), ETL_QUEUE_PREFIX),
         media_type="text/event-stream",
         headers={
             "Cache-Control":               "no-cache",
@@ -120,9 +127,11 @@ async def trigger_all(
     if invalid:
         raise HTTPException(status_code=400, detail=f"未知 step: {invalid}")
 
-    from services.etl_service import run_all_pipeline
-    background.add_task(run_all_pipeline, req.job_id, steps)
+    background.add_task(run_all, req.job_id, steps)
     return TriggerResponse(
         job_ids=[req.job_id],
         message=f"已创建 {len([req.job_id])} 个全量任务（mode={req.mode}）"
     )
+
+if __name__ == "__main__":
+    push_event()

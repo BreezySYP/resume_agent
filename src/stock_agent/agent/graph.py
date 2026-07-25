@@ -72,7 +72,7 @@ def build_investment_agent(checkpointer=None, thread_id="default"):
     )
 
 
-def ask_investment(question: str, thread_id: str = "default"):
+def ask_investment(question: str, job_id: str, thread_id: str = "default"):
     """推荐入口"""
     config = {
         "configurable": {"thread_id": thread_id},
@@ -82,7 +82,7 @@ def ask_investment(question: str, thread_id: str = "default"):
     with get_redis_checkpointer() as cp:
         cp.setup()
         agent = build_investment_agent(checkpointer=cp, thread_id=thread_id)
-        result = agent.invoke({"user_question": question, "thread_id": thread_id}, config=config)
+        result = agent.invoke({"user_question": question, "thread_id": thread_id, "job_id": job_id}, config=config)
     
     return result
 

@@ -4,7 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from shared.db.mysql import get_db
-from services.etl_service import STEPS_META
+from service.etl_service import STEPS_META
 
 router = APIRouter(prefix="/api/status", tags=["ETL 状态"])
 

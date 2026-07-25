@@ -8,7 +8,7 @@ from typing import AsyncGenerator
 import pandas as pd
 from loguru import logger
 from redis import Redis
-from redis import asyncio
+import asyncio
 from shared.configs.settings import REDIS_URL
 import inspect
 from redis.asyncio import Redis as aRedis

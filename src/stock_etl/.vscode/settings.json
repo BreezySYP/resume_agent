@@ -2,16 +2,13 @@
     "python.defaultInterpreterPath": "/workspace/.venv/bin/python",
     "python.envFile": "${workspaceFolder}/.env",
     
-    // 关键：告诉 Pylance 额外搜索路径
+    // 只添加当前项目需要的路径
     "python.analysis.extraPaths": [
-        "/workspace/packages/shared/src"
+        "/workspace/packages/shared/src",   // 引用 shared
+        "${workspaceFolder}"                  // 当前项目本身
     ],
     
-    "python.analysis.typeCheckingMode": "off",
-    
-    // 让 Pylance 使用 uv 的环境
+    "python.analysis.typeCheckingMode": "basic",
     "python.terminal.activateEnvironment": true,
-    
-    // Debug 配置
     "debugpy.debugJustMyCode": false
 }

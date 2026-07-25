@@ -12,6 +12,7 @@ from shared.code_rule import add_prefix
 from shared.db.mysql import engine
 from shared.models.deepseek import get_deepseek
 from event.decorator import node
+from loguru import logger
 
 
 FINANCIAL_FACTOR_EXPLAIN = """
@@ -159,6 +160,7 @@ def fundamental_node(state: AgentState) -> Dict[str, Any]:
 
     df = pd.read_sql(sql, engine.connect()).round(2)
     result = df.to_dict(orient="records")
+    logger.info("获得基本面数据 {} 条", len(result))
     return {
         "stock_financial_factor": result,
         "rag_contexts": [result]

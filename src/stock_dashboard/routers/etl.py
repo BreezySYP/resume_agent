@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from loguru import logger
 
 from shared.db.mysql import get_db
-from services.etl_service import (
+from service.etl_service import (
     STEPS_META,
     PER_STOCK_STEPS,
     DAILY_STEPS,
@@ -18,8 +18,7 @@ from services.etl_service import (
     run_step_async,
     sse_stream,
     get_running_jobs,
-    get_job_logs,
-    trigger_stock_etl
+    get_job_logs
 )
 
 router = APIRouter(prefix="/api/etl", tags=["ETL 任务"])

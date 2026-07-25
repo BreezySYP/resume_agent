@@ -27,7 +27,10 @@ MINIO_BUCKET   = os.getenv("MINIO_BUCKET",        "skills")
 QDRANT_URL  = os.getenv("QDRANT_URL", "http://host.docker.internal:6333")
 CUDA_RERANK_URL = os.getenv("CUDA_RERANK_URL", "http://host.docker.internal:8000/api/v1/rerank")
 
-GRAFANA_URL = os.getenv("GRAFANA_URL", "")
+TEMPO_URL = os.getenv("TEMPO_URL", "")
+LOKI_PUSH_URL = os.getenv("LOKI_PUSH_URL")
+ENV = os.getenv("ENV")
+APP_NAME = os.getenv("NAME")
 
 THREAD_ID    = os.getenv("THREAD_ID", "agent_001")
 GRAPH_CONFIG = {"configurable": {"thread_id": THREAD_ID}}
