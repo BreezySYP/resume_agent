@@ -9,7 +9,7 @@ class AgentState(TypedDict):
     reflections:    List[str]
     final_answer:   str
     human_feedback: str
-    rag_contexts:   List[str]      # Researcher 收集的检索内容，供 RAGAS 使用
+    rag_contexts: Annotated[List[str], operator.add] = []
     ragas_result:   Optional[dict] # 最新一次 RAGAS 评估结果
     user_question:  str
     retry_count:     int
@@ -19,3 +19,11 @@ class AgentState(TypedDict):
     stock_profile: dict
     stock_technique_factor: dict
     stock_financial_factor: dict
+    plan: str
+    current_time: str
+    errors:  Annotated[List[str], operator.add] = []
+    confidence: float = 0.0
+    news_analysis: str
+    markdown: str
+    thread_id: str
+    job_id: str

@@ -4,6 +4,7 @@ members = [
     "src/dev_agent",
     "src/stock_agent",
     "src/stock_etl",
+    "src/stock_dashboard"
 ]
 [tool.uv]
 dev-dependencies = ["pytest>=8.0", "ruff>=0.4"]

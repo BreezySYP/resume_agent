@@ -4,13 +4,10 @@
     
     // 关键：告诉 Pylance 额外搜索路径
     "python.analysis.extraPaths": [
-        "/workspace/packages/shared/src",
-        "/workspace/src/dev_agent",
-        "/workspace/src/stock_agent",
-        "/workspace/src/stock_etl"
+        "/workspace/packages/shared/src"
     ],
     
-    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.typeCheckingMode": "off",
     
     // 让 Pylance 使用 uv 的环境
     "python.terminal.activateEnvironment": true,

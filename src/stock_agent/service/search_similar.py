@@ -1,4 +1,6 @@
 """service/search_similar.py — Qdrant 混合检索 + MySQL 回表 + rerank"""
+from functools import lru_cache
+
 import pandas as pd
 from fastembed import SparseTextEmbedding
 from loguru import logger
@@ -6,24 +8,25 @@ from qdrant_client import models
 from qdrant_client.models import Prefetch, SparseVector
 from shared.db.mysql import engine
 from shared.db.qdrant import get_qdrant_client
-from shared.models.ollama_models import get_embedding
+from shared.models.ollama_models import get_embedding 
+from service.cuda_service import rerank
 
-client = get_qdrant_client()
-model = get_embedding()
-sparse_model = SparseTextEmbedding("Qdrant/bm25")
 
+@lru_cache(maxsize=1)
+def get_sparse_model():
+    return SparseTextEmbedding("Qdrant/bm25")
 
 def search_from_qdrant(collection: str, query: str, top_k: int = 5) -> pd.DataFrame:
-    qvec = model.embed_query(query)
-    hits = client.query_points(collection_name=collection, query=qvec, limit=top_k)
+    qvec = get_embedding().embed_query(query)
+    hits = get_qdrant_client().query_points(collection_name=collection, query=qvec, limit=top_k)
     return pd.DataFrame([{"id": h["id"], "score": h["score"], "payload": h["payload"]} for h in hits.dict()["points"]])
 
 
 def search_from_qdrant_hybrid(collection: str, query: str, top_k: int = 5) -> pd.DataFrame:
-    dense_query = model.embed_query(query)
-    sparse_emb = next(iter(sparse_model.embed(query)))
+    dense_query = get_embedding().embed_query(query)
+    sparse_emb = next(iter(get_sparse_model().embed(query)))
     sparse_vec = SparseVector(indices=sparse_emb.indices.tolist(), values=sparse_emb.values.tolist())
-    results = client.query_points(
+    results = get_qdrant_client().query_points(
         collection_name=collection,
         prefetch=[Prefetch(query=dense_query, using="dense", limit=30), Prefetch(query=sparse_vec, using="sparse", limit=30)],
         query=models.FusionQuery(fusion=models.Fusion.RRF),
@@ -53,8 +56,6 @@ def search_hybrid(collection: str, table: str, query: str, top_k: int = 5) -> pd
 
 def search_with_rerank(query: str, collection: str, table: str, build_text, top_k: int = 5) -> pd.DataFrame:
     """混合召回 top 100 -> rerank -> 取最终 top_k"""
-    from service.cuda_service import rerank
-
     results = search_hybrid(collection, table, query, top_k=100)
     scores = rerank(query=query, docs=[build_text(row) for _, row in results.iterrows()])
     results["rerank_score"] = scores["rerank_score"]

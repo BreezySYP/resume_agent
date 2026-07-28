@@ -57,3 +57,14 @@ def fetch_capital_flow(pz: int = 100) -> pd.DataFrame | None:
     except Exception as e:
         logger.error("❌ 资金流获取失败: {}", e)
         return None
+    
+
+if __name__ == "__main__":
+    print(fetch_hot_sectors())
+    print(fetch_capital_flow()
+          
+          
+          
+          
+          
+          )

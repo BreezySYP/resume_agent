@@ -7,25 +7,11 @@ import baostock as bs
 import pandas as pd
 import requests
 from loguru import logger
-from shared.code_rule import remove_prefix
+from shared.code_rule import add_prefix, remove_prefix
 
 
 def _random_var(n: int = 13) -> str:
     return str(randint(10 ** (n - 1), 10 ** n - 1))
-
-
-def get_history(symbol: str, start: str, end: str) -> pd.DataFrame:
-    url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?_var=&param={symbol},day,{start},{end},640,qfq"
-    data_json = requests.get(url).json()
-    symbol_node = data_json["data"][symbol]
-    content = symbol_node.get("qfqday") or symbol_node["day"]
-    df = pd.DataFrame([row[:6] for row in content], columns=["date", "open", "close", "high", "low", "volume"])
-    df["code"] = remove_prefix(symbol)
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    for col in ("open", "close", "high", "low", "volume"):
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-    return df
-
 
 def get_all_codes() -> pd.DataFrame:
     return ak.stock_info_a_code_name()
@@ -41,6 +27,23 @@ def top_hs300(date: str | None = None) -> pd.DataFrame:
     return df[["code", "name"]]
 
 
+def fetch_history(name: str, code:str, start_date: str, end_date: str):
+    code = add_prefix(code)
+    url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?_var=&param={code},day,{start_date[:10]},{end_date},640,qfq"
+    data_json = requests.get(url).json()
+    symbol_node = data_json["data"][code]
+    content = symbol_node.get("qfqday") or symbol_node["day"]
+    df = pd.DataFrame([row[:6] for row in content], columns=["date", "open", "close", "high", "low", "volume"])
+    df["code"] = remove_prefix(code)
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    for col in ("open", "close", "high", "low", "volume"):
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df["name"] = name
+    df["price_change"] = (df["close"] - df["close"].shift(1)).round(2)
+    df[df.select_dtypes(include="float").columns] = df.select_dtypes(include="float").round(2)
+    logger.info("✅ {} {} {} 条", code, name, len(df))
+    return df
+
 def fetch_all_history(start_date: str, end_date: str, min_code: str = "000000", on_batch=None, batch_size: int = 50) -> None:
     """全市场历史 K 线逐批抓取。
     每 batch_size 只股票处理完后调用 on_batch(df, last_code)：
@@ -55,13 +58,9 @@ def fetch_all_history(start_date: str, end_date: str, min_code: str = "000000", 
     last_code = None
     for code, name in codes:
         try:
-            df = get_history(code, start_date, end_date)
-            df["name"] = name
-            df["price_change"] = (df["close"] - df["close"].shift(1)).round(2)
-            df[df.select_dtypes(include="float").columns] = df.select_dtypes(include="float").round(2)
+            df = fetch_history(name, code, start_date, end_date)
             frames.append(df)
             last_code = code
-            logger.info("✅ {} {} {} 条", code, name, len(df))
         except Exception as e:
             logger.error("❌ {} {} 失败: {}", code, name, e)
 
@@ -73,3 +72,7 @@ def fetch_all_history(start_date: str, end_date: str, min_code: str = "000000", 
 
     if on_batch and frames and last_code:
         on_batch(pd.concat(frames, ignore_index=True), last_code)
+
+
+if __name__ == "__main__":
+    print(fetch_history("klalaala", "000001", "2026-06-01", "2026-06-30"))

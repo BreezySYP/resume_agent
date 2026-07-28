@@ -4,7 +4,9 @@ import pandas as pd
 
 
 def build_financial_features(df: pd.DataFrame) -> pd.DataFrame:
-    """输入: financial_statement 长表，输出: 带成长率/质量分的特征表"""
+    """可以计算单个code也可多个code同时计算
+    输入: financial_statement 长表，输出: 带成长率/质量分的特征表
+    """
     df = df.copy()
     df = df.sort_values(["code", "report_date"]).reset_index(drop=True)
 

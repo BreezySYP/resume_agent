@@ -40,6 +40,25 @@ def stock_zygc_em(symbol: str = "SH688041") -> pd.DataFrame:
     return df
 
 
+def fetch_profile(code, name):
+    df1 = ak.stock_zyjs_ths(code)
+    p = df1[["股票代码", "主营业务", "经营范围"]].rename(columns={"股票代码": "code", "主营业务": "business", "经营范围": "scope"})
+    p["update_time"] = datetime.now()
+    p["name"] = name
+    logger.info("fetched profile for {} {}", code, name)
+    return p
+
+def fetch_news_breakdown(code, name):
+    zygc = stock_zygc_em(add_prefix(code, upper=True))
+    if zygc.empty:
+        logger.warning("no breakdown news for {} {}", code, name)
+        return pd.DataFrame()
+    else:
+        zygc = zygc.rename(columns=BREAKDOWN_RENAME)
+        zygc["name"] = name
+        logger.info("fetched fetch_news_breakdown for {} {}", code, name)
+    return zygc
+
 def fetch_profiles_and_breakdowns(min_code: str = "000000", on_batch=None, batch_size: int = 50) -> None:
     """逐批抓取主营业务简介 + 主营构成。每 batch_size 只股票后调用 on_batch(profile_df, breakdown_df, last_code)：
     调用方负责在 on_batch 里先存 DB 再更新 checkpoint。
@@ -49,21 +68,13 @@ def fetch_profiles_and_breakdowns(min_code: str = "000000", on_batch=None, batch
     profile_frames, breakdown_frames = [], []
     last_code = None
     for code, name in codes:
-        df1 = ak.stock_zyjs_ths(code)
-        p = df1[["股票代码", "主营业务", "经营范围"]].rename(columns={"股票代码": "code", "主营业务": "business", "经营范围": "scope"})
-        p["update_time"] = datetime.now()
-        p["name"] = name
+        p = fetch_profile(code, name)
         profile_frames.append(p)
-        logger.info("fetched profile for {} {}", code, name)
         time.sleep(random.uniform(1, 2))
 
         zygc = stock_zygc_em(add_prefix(code, upper=True))
-        if zygc.empty:
-            logger.warning("no zygc for {} {}", code, name)
-        else:
-            b = zygc.rename(columns=BREAKDOWN_RENAME)
-            b["name"] = name
-            breakdown_frames.append(b)
+        if not zygc.empty:
+            breakdown_frames.append(zygc)
 
         last_code = code
 
@@ -84,5 +95,6 @@ def fetch_profiles_and_breakdowns(min_code: str = "000000", on_batch=None, batch
             last_code,
         )
 
-# if __name__ == "__main__":
-#     # fetch_profiles_and_breakdowns()
+if __name__ == "__main__":
+    print(fetch_profile("000001", "haha"))
+    print(fetch_news_breakdown("000001", "haha"))

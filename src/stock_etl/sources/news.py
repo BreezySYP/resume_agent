@@ -29,6 +29,16 @@ def stock_news(symbol: str) -> pd.DataFrame:
     return pd.DataFrame(data_json["result"]["cmsArticleWebOld"])
 
 
+def fetch_stock_news(code, name):
+    """code format is 000001"""
+    news_df = stock_news(symbol=code)
+    news_df["name"] = name
+    news_df["code"] = code
+    news_df = news_df.drop(columns=["image"], errors="ignore")
+    logger.info("fetched news for {} {}", code, name)
+    return news_df
+
+
 def fetch_all_stock_news(min_code: str = "000000", on_batch=None, batch_size: int = 100) -> None:
     """逐批抓取个股新闻。每 batch_size 只股票后调用 on_batch(df, last_code)：
     调用方负责在 on_batch 里先存 DB 再更新 checkpoint。
@@ -40,14 +50,10 @@ def fetch_all_stock_news(min_code: str = "000000", on_batch=None, batch_size: in
     frames = []
     last_code = None
     for code, name in codes:
-        news_df = stock_news(symbol=code)
+        news_df = fetch_stock_news(code, name)
         last_code = code
         if not news_df.empty:
-            news_df["name"] = name
-            news_df["code"] = code
-            news_df = news_df.drop(columns=["image"], errors="ignore")
             frames.append(news_df)
-            logger.info("fetched news for {} {}", code, name)
 
         if on_batch and len(frames) >= batch_size and last_code:
             on_batch(pd.concat(frames, ignore_index=True), last_code)
@@ -57,3 +63,6 @@ def fetch_all_stock_news(min_code: str = "000000", on_batch=None, batch_size: in
 
     if on_batch and frames and last_code:
         on_batch(pd.concat(frames, ignore_index=True), last_code)
+
+if __name__ == "__main__":
+    print(fetch_stock_news("000001", "aaaa"))

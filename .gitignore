@@ -10,3 +10,8 @@ wheels/
 .venv
 *.csv
 *.zip
+
+.env.prod
+.env
+
+*.pckl

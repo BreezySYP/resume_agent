@@ -1,0 +1,40 @@
+auth_enabled: false  # ← 添加这一行，禁用多租户
+
+server:
+  http_listen_port: 3100
+
+# ==================== 存储配置 ====================
+common:
+  path_prefix: /loki
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+  storage:
+    s3:                     # 使用 S3 驱动连接 MinIO
+      endpoint: minio:9000          # ← 修改成你的 MinIO 服务地址
+      insecure: true                     # 如果是 HTTP 就用 true
+      bucketnames: loki-data            # Loki 存储 chunks 的 bucket（需提前创建）
+      access_key_id: loki
+      secret_access_key: SuperSecretKey123456!
+      s3forcepathstyle: true             # MinIO 必须开启
+
+schema_config:
+  configs:
+    - from: 2023-01-01
+      store: tsdb
+      object_store: s3
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+# 可选：ruler 配置（规则存储）
+ruler:
+  storage:
+    s3:
+      bucketnames: loki-ruler           # 另一个 bucket 用于规则
+
+compactor:
+  working_directory: /tmp/compactor
