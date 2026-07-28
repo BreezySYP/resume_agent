@@ -17,7 +17,7 @@ from shared.agents.checkpoint import get_redis_checkpointer
 from event.event_manager import event
 
 
-def build_investment_agent(checkpointer=None, thread_id="default"):
+def build_investment_agent(checkpointer, job_id):
     """生产级 Graph 构建函数"""
     workflow = StateGraph(AgentState)
     
@@ -53,7 +53,7 @@ def build_investment_agent(checkpointer=None, thread_id="default"):
         retry_count = state.get("retry_count", 0)
         
         if retry_count >= 3 or "PASS" in last_reflection:
-            event.graph_finish(thread_id, "END", state.get("final_answer", "获取最终答案失败，请查询日志"))
+            event.graph_finish(job_id, "END", state.get("final_answer", "获取最终答案失败，请查询日志"))
             return END   # 直接结束，不再回 synthesizer
         
         return "synthesizer"
@@ -81,15 +81,16 @@ def ask_investment(question: str, job_id: str, thread_id: str = "default"):
     
     with get_redis_checkpointer() as cp:
         cp.setup()
-        agent = build_investment_agent(checkpointer=cp, thread_id=thread_id)
+        agent = build_investment_agent(checkpointer=cp, job_id=job_id)
         result = agent.invoke({"user_question": question, "thread_id": thread_id, "job_id": job_id}, config=config)
     
     return result
 
 
 
+
 if __name__ == "__main__":
-    result = ask_investment("兆易创新已经让我总资产跌了快30%我现在是重仓，接下来该怎么办？", "debug")
+    result = ask_investment("未来AI应用比较值得投资的有哪些？", "dummy", "debug")
     
     print(result.get("final_answer"))
     print(result["messages"][-1].content)
@@ -99,27 +100,4 @@ if __name__ == "__main__":
         if not event:
             break
         print(event)
-    # from langsmith import evaluate, Client
-    # client = Client()
-    # def target(inputs: dict):
-    #     """Agent 执行函数 - 必须返回 output"""
-    #     question = inputs["user_question"]
-    #     answer = ask_investment(question)
 
-
-
-
-
-    #     return {
-    #         "output": answer,                    # 关键字段
-    #         "final_answer": answer               # 可选
-    #     }
-
-    # # 运行评估
-    # evaluate(
-    #     target,
-    #     data="stock_eval_dataset",
-    #     evaluators=["correctness"],              # 先用内置
-    #     experiment_prefix="stock_agent_test",
-    #     max_concurrency=2
-    # )

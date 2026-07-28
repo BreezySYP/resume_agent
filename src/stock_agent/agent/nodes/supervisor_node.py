@@ -13,8 +13,11 @@ class AnalysisPlan(BaseModel):
     plan_summary: str = Field(...)
     focus_areas: list[str] = Field(...)  # ["fundamental", "technical", "news"]
 
+MAX_MEMORY = 5
 @node(node_name="supervisor", title="监督节点")
 def supervisor_node(state: AgentState) -> Dict[str, Any]:
+    if state["messages"] and len(state["messages"]) >MAX_MEMORY:
+        state["messages"] = state["messages"][-MAX_MEMORY:]
     currtime = time_tool.invoke("")
     
     system_prompt = SystemMessage(content=f"""
@@ -40,7 +43,7 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
         plan = {"current_time": currtime, "plan_summary": "解析失败", "focus_areas": ["fundamental", "news"]}
 
     return {
-        "messages": [SystemMessage(content=f"Plan: {plan}")],
+        "messages": [state["user_question"]],
         "plan": plan,
         "user_question": state["user_question"],
         "current_time": currtime

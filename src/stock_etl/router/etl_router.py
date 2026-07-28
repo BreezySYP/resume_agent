@@ -42,8 +42,6 @@ def trigger_stock_etl(
 ):
     
     job_id = str(uuid4())
-    run_code(job_id, req.code, req.steps)
-    
     background.add_task(run_code, job_id, req.code, req.steps)
     return TriggerResponse(job_ids=[job_id], message="Finished run steps for code")
 
@@ -86,9 +84,9 @@ def list_steps():
         """,
         response_class=StreamingResponse,
     )
-async def stream_job(job_id: int):
+async def stream_job(job_id: str):
     return StreamingResponse(
-        sse_stream(str(job_id), ETL_QUEUE_PREFIX),
+        sse_stream(job_id, ETL_QUEUE_PREFIX),
         media_type="text/event-stream",
         headers={
             "Cache-Control":               "no-cache",
@@ -132,6 +130,3 @@ async def trigger_all(
         job_ids=[req.job_id],
         message=f"已创建 {len([req.job_id])} 个全量任务（mode={req.mode}）"
     )
-
-if __name__ == "__main__":
-    push_event()

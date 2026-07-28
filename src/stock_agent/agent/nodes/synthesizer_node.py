@@ -20,6 +20,8 @@ class InvestmentRecommendation(BaseModel):
 
 @node(node_name="synthesizer", title="综合分析节点")
 def synthesizer_node(state: AgentState) -> Dict[str, Any]:
+
+
     llm = get_deepseek(temperature=0.1)
     
     final_prompt = f"""
@@ -34,6 +36,7 @@ def synthesizer_node(state: AgentState) -> Dict[str, Any]:
         - 基本面计算方式： {FINANCIAL_FACTOR_EXPLAIN}
         - 新闻分析：{state.get("news_analysis", "")}
         - 用户问题：{state.get("user_question", "")}
+        - 对话历史: {state.get("messages")}
 
         严格按照以下 JSON Schema 输出：
         {InvestmentRecommendation.model_json_schema()}
