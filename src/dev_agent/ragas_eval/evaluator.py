@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 from typing import Any
 from datasets import Dataset
+from loguru import logger
 from ragas import evaluate
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.llms import LangchainLLMWrapper
@@ -34,12 +35,12 @@ def run_ragas(question: str, contexts: list[str], answer: str, llm, run_id: str 
                 "question":         question[:80] + ("..." if len(question) > 80 else ""),
             }
         except Exception as e:
-            print(f"⚠️  RAGAS 评估失败: {e}")
+            logger.info(f"⚠️  RAGAS 评估失败: {e}")
             scores = {"faithfulness": None, "answer_relevancy": None,
                       "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                       "question": question[:80], "error": str(e)}
         _push_to_langsmith(scores, question, answer, run_id)
-        print(f"📊 RAGAS → faithfulness={scores['faithfulness']} answer_relevancy={scores['answer_relevancy']}")
+        logger.info(f"📊 RAGAS → faithfulness={scores['faithfulness']} answer_relevancy={scores['answer_relevancy']}")
         return scores
 
 
@@ -57,4 +58,4 @@ def _push_to_langsmith(scores: dict, question: str, answer: str, run_id: str | N
                 _ls_client.create_feedback(run_id=run_id, key=f"ragas_{key}", score=value,
                                            comment=f"Auto RAGAS eval @ {scores['timestamp']}")
     except Exception as e:
-        print(f"⚠️  LangSmith 上报失败: {e}")
+        logger.info(f"⚠️  LangSmith 上报失败: {e}")
