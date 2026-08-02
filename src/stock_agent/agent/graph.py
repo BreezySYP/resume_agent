@@ -15,7 +15,16 @@ from shared.agents.agent_state import AgentState
 from shared.agents.checkpoint import get_redis_checkpointer
 
 from event.event_manager import event
+from shared.models.deepseek import get_deepseek
+from shared.rag.eval import run_ragas
 
+
+def ragas(state: AgentState):
+    ragas_id = "f7ccbd38-414d-472e-a786-a859eb22d6c7"
+    contexts = [str(c) for c in state["rag_contexts"]]
+    
+    context_text = "\n".join(contexts) if contexts else "无检索内容"
+    run_ragas(state["user_question"], context_text, state["final_answer"], get_deepseek(), run_id=ragas_id)
 
 def build_investment_agent(checkpointer, job_id):
     """生产级 Graph 构建函数"""
@@ -54,6 +63,7 @@ def build_investment_agent(checkpointer, job_id):
         
         if retry_count >= 3 or "PASS" in last_reflection:
             event.graph_finish(job_id, "END", state.get("final_answer", "获取最终答案失败，请查询日志"))
+            ragas(state=state)
             return END   # 直接结束，不再回 synthesizer
         
         return "synthesizer"
@@ -87,10 +97,8 @@ def ask_investment(question: str, job_id: str, thread_id: str = "default"):
     return result
 
 
-
-
 if __name__ == "__main__":
-    result = ask_investment("未来AI应用比较值得投资的有哪些？", "dummy", "debug")
+    result = ask_investment("我现在重仓兆易创新，有什么建议？", "dummy", "debug")
     
     print(result.get("final_answer"))
     print(result["messages"][-1].content)

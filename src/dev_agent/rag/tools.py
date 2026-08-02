@@ -5,6 +5,7 @@ from langchain_core.tools import tool
 from langchain_core.documents import Document
 from langchain_tavily import TavilySearch
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from loguru import logger
 from shared.configs.settings import GRAPH_CONFIG
 from shared.configs.tracing import tracer
 from shared.models.ollama_models import get_llm
@@ -26,7 +27,7 @@ def _cache_tavily_results(query: str, results: list[dict]) -> None:
     chunks = _splitter.split_documents(docs)
     if chunks:
         get_vector_store().add_documents(chunks)
-        print(f"  💾 Tavily 缓存: {len(chunks)} chunks")
+        logger.info(f"  💾 Tavily 缓存: {len(chunks)} chunks")
 
 
 @tool

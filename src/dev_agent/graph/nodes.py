@@ -4,6 +4,7 @@ from functools import lru_cache
 import os
 from typing import Any
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from loguru import logger
 from shared.configs.settings import GRAPH_CONFIG
 from shared.configs.tracing import tracer
 from shared.models.ollama_models import get_llm
@@ -31,7 +32,7 @@ def entry_node(state: AgentState) -> dict:
         last = state["messages"][-1]
         if isinstance(last, HumanMessage):
             user_question = last.content.strip()
-    print(f"🔍 Entry: {user_question[:80]}")
+    logger.info(f"🔍 Entry: {user_question[:80]}")
     return {"user_question": user_question}
 
 
@@ -68,7 +69,7 @@ def supervisor_node(state: AgentState) -> dict:
         response  = get_llm().invoke([SystemMessage(content=prompt)])
         decision  = response.content.strip().split("\n")[0].strip()
         next_node = _NODE_MAP.get(decision.lower(), decision)
-        print(f"🔀 Supervisor → {next_node}")
+        logger.info(f"🔀 Supervisor → {next_node}")
         return {"next": next_node}
 
 
@@ -137,7 +138,7 @@ def reflection_node(state: AgentState) -> dict:
         )
         response = get_llm().invoke([SystemMessage(content=prompt)])
         text     = response.content
-        print(f"🤔 Reflection: {text[:100]}")
+        logger.info(f"🤔 Reflection: {text[:100]}")
         return {
             "reflections": [text],
             "messages":    [HumanMessage(content=f"[Reflection] {text}")],
@@ -162,7 +163,7 @@ def final_answer_node(state: AgentState) -> dict:
             text += "\n\n【系统反思】\n" + "\n".join(state["reflections"])
         if state.get("human_feedback"):
             text += f"\n\n【用户反馈】：{state['human_feedback']}"
-        print(f"✅ Final: {text[:80]}")
+        logger.info(f"✅ Final: {text[:80]}")
         ragas_result = _run_ragas_async(state, text)
         return {"final_answer": text, "messages": state["messages"], "ragas_result": ragas_result}
 
@@ -188,7 +189,7 @@ def _run_ragas_async(state: AgentState, answer: str) -> dict | None:
             )
             result_holder.update(scores)
         except Exception as e:
-            print(f"⚠️  RAGAS 线程异常: {e}")
+            logger.info(f"⚠️  RAGAS 线程异常: {e}")
 
     t = threading.Thread(target=_eval, daemon=True)
     t.start(); t.join(timeout=120)

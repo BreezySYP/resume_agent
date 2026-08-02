@@ -1,6 +1,7 @@
 """rag/vector_store.py — Redis Vector Store"""
 from functools import lru_cache
 from langchain_redis import RedisVectorStore
+from loguru import logger
 from shared.configs.settings import REDIS_URL, VS_INDEX_NAME
 from shared.models.ollama_models import get_embedding
 
@@ -13,7 +14,7 @@ def get_vector_store() -> RedisVectorStore:
         index_name=VS_INDEX_NAME,
         redis_url=REDIS_URL,
     )
-    print(f"✅ Vector Store 就绪: {VS_INDEX_NAME}")
+    logger.info(f"✅ Vector Store 就绪: {VS_INDEX_NAME}")
     return vs
 
 
@@ -25,5 +26,5 @@ def get_vector_store(index_name) -> RedisVectorStore:
         index_name=index_name,
         redis_url=REDIS_URL,
     )
-    print(f"✅ Vector Store 就绪: {index_name}")
+    logger.info(f"✅ Vector Store 就绪: {index_name}")
     return vs

@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, UnstructuredMarkdownLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from loguru import logger
 from rag.vector_store import get_vector_store
 
 SUPPORTED = {".pdf", ".txt", ".md", ".markdown"}
@@ -17,9 +18,9 @@ def ingest_local_files(paths: list[str], chunk_size: int = 800, chunk_overlap: i
         path   = Path(p)
         suffix = path.suffix.lower()
         if not path.exists():
-            print(f"⚠️  不存在: {p}"); continue
+            logger.info(f"⚠️  不存在: {p}"); continue
         if suffix not in SUPPORTED:
-            print(f"⚠️  不支持: {p}"); continue
+            logger.info(f"⚠️  不支持: {p}"); continue
         loader = (PyPDFLoader(str(path)) if suffix == ".pdf"
                   else TextLoader(str(path), encoding="utf-8") if suffix == ".txt"
                   else UnstructuredMarkdownLoader(str(path)))
@@ -27,11 +28,11 @@ def ingest_local_files(paths: list[str], chunk_size: int = 800, chunk_overlap: i
         for c in chunks:
             c.metadata.update({"source_type": "local_file", "file_name": path.name})
         all_docs.extend(chunks)
-        print(f"  📄 {path.name}: {len(chunks)} chunks")
+        logger.info(f"  📄 {path.name}: {len(chunks)} chunks")
     if not all_docs:
-        print("⚠️  没有可写入的文档"); return 0
+        logger.info("⚠️  没有可写入的文档"); return 0
     get_vector_store().add_documents(all_docs)
-    print(f"✅ 写入 {len(all_docs)} chunks")
+    logger.info(f"✅ 写入 {len(all_docs)} chunks")
     return len(all_docs)
 
 

@@ -8,7 +8,7 @@ from langgraph.checkpoint.redis import RedisSaver
 from shared.configs.settings import REDIS_URL, GRAPH_CONFIG
 from graph.workflow import build_graph
 from ui.streamlit_app import run_ui
-
+from loguru import logger
 
 @traceable
 def run() -> None:
@@ -25,7 +25,7 @@ def run() -> None:
             },
             config=GRAPH_CONFIG,
         )
-        print(result)
+        logger.info(result)
 
 
 def clear_checkpoint():
@@ -34,7 +34,7 @@ def clear_checkpoint():
     keys = r.keys("checkpoint:*")
     if keys:
         r.delete(*keys)
-        print(f"✅ 已清除 {len(keys)} 个 checkpoint 键")
+        logger.info(f"✅ 已清除 {len(keys)} 个 checkpoint 键")
 
 
 # LangGraph CLI 识别此变量

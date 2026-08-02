@@ -4,17 +4,18 @@ from typing import List
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_groq import ChatGroq
 from shared.configs.settings import OLLAMA_URL, LLM_MODEL, LLM_SQL, EMBED_MODEL, GROQ_API_KEY
+from loguru import logger
 
 
 @lru_cache(maxsize=1)
 def get_llm() -> ChatOllama:
-    print("preparing llm...")
+    logger.info("preparing llm...")
     llm = ChatOllama(model=LLM_MODEL, 
                      temperature=0,
                     #   num_ctx=8192, 
                     #   num_gpu=999, 
                       base_url=OLLAMA_URL)
-    print("✅ llm ready")
+    logger.info("✅ llm ready")
     return llm
 
 
@@ -34,9 +35,9 @@ def get_fast_llm():
 
 @lru_cache(maxsize=1)
 def get_embedding() -> OllamaEmbeddings:
-    print("preparing embeddings...")
+    logger.info("preparing embeddings...")
     emb = OllamaEmbeddings(model=EMBED_MODEL, num_gpu=2, base_url=OLLAMA_URL)
-    print("✅ embeddings ready")
+    logger.info("✅ embeddings ready")
     return emb
 
 def get_embedding_dim():
@@ -48,7 +49,7 @@ def get_embedding_dim():
 @lru_cache(maxsize=1)
 def get_ollama_embedding():
     import ollama
-    print(f"preparing embeddings with native ollama (bge-m3) @ {OLLAMA_URL}...")
+    logger.info(f"preparing embeddings with native ollama (bge-m3) @ {OLLAMA_URL}...")
     
     # 配置 client
     client = ollama.Client(host=OLLAMA_URL)
@@ -61,7 +62,7 @@ def get_ollama_embedding():
         )
         return response['embeddings']
     
-    print("✅ ollama native client ready")
+    logger.info("✅ ollama native client ready")
     return embed_documents
     
 
