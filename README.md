@@ -11,6 +11,7 @@
 
 - **Demo 视频**：[Bilibili - 项目演示](https://www.bilibili.com/video/BV1Ec3X6kEnC/?vd_source=d19ada736c4a9fd9ed5f7e91130d360e)
 - **架构图 (draw.io)**：[Google Drive 查看](https://drive.google.com/file/d/1uOruh8gEFiqzysdf_7AEw05jw0qGSIIY/view?usp=sharing)
+- **前端 （react+typescript）**: [https://github.com/BreezySYP/stock-dashboard-ui]
 
 示例输出（AI 投资机会深度分析报告）：
 
