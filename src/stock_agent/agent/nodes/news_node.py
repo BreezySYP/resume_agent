@@ -13,7 +13,7 @@ def news_node(state: AgentState) -> Dict[str, Any]:
     current_time = state.get("current_time", time_tool.invoke(""))
     stock_names = " ".join([p.get("name", str(p)) for p in state.get("stock_profile", [])])
     
-    model = get_deepseek(temperature=0.2)
+    model = get_deepseek(model="deepseek-chat", temperature=0.2)
     
     prompt = SystemMessage(content=f"""
         你是新闻分析师。

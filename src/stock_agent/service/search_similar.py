@@ -56,7 +56,7 @@ def search_hybrid(collection: str, table: str, query: str, top_k: int = 5) -> pd
 
 def search_with_rerank(query: str, collection: str, table: str, build_text, top_k: int = 5) -> pd.DataFrame:
     """混合召回 top 100 -> rerank -> 取最终 top_k"""
-    results = search_hybrid(collection, table, query, top_k=100)
+    results = search_hybrid(collection, table, query, top_k=top_k)
     scores = rerank(query=query, docs=[build_text(row) for _, row in results.iterrows()])
     results["rerank_score"] = scores["rerank_score"]
     return results.loc[results["rerank_score"].nlargest(top_k).index]

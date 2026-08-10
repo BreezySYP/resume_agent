@@ -56,7 +56,7 @@ def node(node_name: str, title: str):
                     "node.name": node_name,
                     "node.title": title,
                     "thread.id": thread_id,
-                    "job.id": job_id,
+                    "job.id": str(job_id),
                     "state.keys": list(state.keys()) if isinstance(state, dict) else None,
                 }
             ) as span:

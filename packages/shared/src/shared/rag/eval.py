@@ -15,8 +15,7 @@ _ls_client = LangSmithClient()
 
 _tracer = get_tracer("agent.ragas")
 
-def run_ragas(question: str, context_text: str, answer: str, llm, run_id: str = "") -> dict:
-    run_id = str(uuid.uuid4()) if run_id is "" else run_id
+def run_ragas(question: str, answer: str, run_id: uuid, scores: dict) -> dict:
     with _tracer.start_as_current_span("agent.ragas", attributes={"question": question, "answer": answer}) as span:
         """轻量版 faithfulness + relevancy 评估"""
 
@@ -54,11 +53,11 @@ def run_ragas(question: str, context_text: str, answer: str, llm, run_id: str = 
             "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "question": question[:80],
         }
-        _push_to_langsmith(scores, question, answer, run_id)
+        push_to_langsmith(scores, question, answer, run_id)
         return scores
 
 
-def _push_to_langsmith(scores: dict, question: str, answer: str, run_id: str) -> None:
+def push_to_langsmith(scores: dict, question: str, answer: str, run_id: str) -> None:
     _ls_client.create_run(id=run_id,
         name="ragas_eval", run_type="chain", project_name=LANGSMITH_PROJECT,
         inputs={"question": question}, outputs={"answer": answer},

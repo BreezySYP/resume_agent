@@ -5,7 +5,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.output_parsers import JsonOutputParser
 from agent.tools import time_tool
 from event.decorator import node
-from shared.agents.agent_state import AgentState
+from shared.agents.agent_state import CLEAR_MARK, AgentState
 from shared.models.deepseek import get_deepseek
 
 class AnalysisPlan(BaseModel):
@@ -32,7 +32,7 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
         {AnalysisPlan.model_json_schema()}
     """)
 
-    model = get_deepseek(temperature=0.1)
+    model = get_deepseek(model="deepseek-chat", temperature=0.1)
     parser = JsonOutputParser(pydantic_object=AnalysisPlan)
     chain = model | parser
 
@@ -46,5 +46,7 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
         "messages": [state["user_question"]],
         "plan": plan,
         "user_question": state["user_question"],
-        "current_time": currtime
+        "current_time": currtime,
+        "errors": [CLEAR_MARK],
+        "rag_contexts": [CLEAR_MARK]
     }

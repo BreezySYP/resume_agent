@@ -22,7 +22,7 @@ class InvestmentRecommendation(BaseModel):
 def synthesizer_node(state: AgentState) -> Dict[str, Any]:
 
 
-    llm = get_deepseek(temperature=0.1)
+    llm = get_deepseek(model="deepseek-chat", temperature=0.1)
     
     final_prompt = f"""
         你是一个严谨的A股投资顾问。
