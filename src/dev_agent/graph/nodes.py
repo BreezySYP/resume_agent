@@ -122,12 +122,12 @@ def generalist_node(state: AgentState) -> dict:
 
 _REFLECTION_TMPL = """你是专业的反思节点。对当前工作总结，判断下一步。
 
-历史：{messages}
+    历史：{messages}
 
-输出格式：
-总结：...
-问题：...
-根据用户问题 {user_question}，下一步建议：（Generalist / Final_Answer）"""
+    输出格式：
+    总结：...
+    问题：...
+    根据用户问题 {user_question}，下一步建议：（Generalist / Final_Answer）"""
 
 
 def reflection_node(state: AgentState) -> dict:

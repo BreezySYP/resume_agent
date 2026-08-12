@@ -8,6 +8,7 @@ from shared.models.deepseek import get_deepseek
 from langchain_core.output_parsers import JsonOutputParser
 from agent.nodes.technical_node import TECHNICAL_EXPLAIN
 from agent.nodes.fundamental_node import FINANCIAL_FACTOR_EXPLAIN
+from shared.metrics.prome import invoke_with_metrics
 
 class InvestmentRecommendation(BaseModel):
     markdown_report: str = Field(..., description="给用户看的完整详尽的 Markdown 报告")
@@ -21,22 +22,18 @@ class InvestmentRecommendation(BaseModel):
 @node(node_name="synthesizer", title="综合分析节点")
 def synthesizer_node(state: AgentState) -> Dict[str, Any]:
 
-
-    llm = get_deepseek(temperature=0.1)
+    model_name = "deepseek-chat"
+    llm = get_deepseek(model=model_name, temperature=0.1)
     
     final_prompt = f"""
         你是一个严谨的A股投资顾问。
         结合以下所有信息，给出专业投资分析报告。
 
         数据：
-        - 股票画像：{state.get("stock_profile", [])}
         - 技术面：{state.get("stock_technique_factor", [])}
-        - 技术面计算方式： {TECHNICAL_EXPLAIN}
         - 基本面：{state.get("stock_financial_factor", [])}
-        - 基本面计算方式： {FINANCIAL_FACTOR_EXPLAIN}
         - 新闻分析：{state.get("news_analysis", "")}
         - 用户问题：{state.get("user_question", "")}
-        - 对话历史: {state.get("messages")}
 
         严格按照以下 JSON Schema 输出：
         {InvestmentRecommendation.model_json_schema()}
@@ -52,8 +49,13 @@ def synthesizer_node(state: AgentState) -> Dict[str, Any]:
         请根据 Reflection 改进输出。
         """.format(reflections=state["reflections"])
     
-    recommendation: InvestmentRecommendation = structured_llm.invoke([SystemMessage(content=final_prompt)])
-    
+    recommendation: InvestmentRecommendation = invoke_with_metrics(
+            structured_llm,
+            [SystemMessage(content=final_prompt)],
+            "synthesizer",
+            model_name
+        )
+
     return {
         "final_answer": recommendation["markdown_report"],
         "messages": [SystemMessage(content=str(recommendation))]

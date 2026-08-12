@@ -1,6 +1,6 @@
 import datetime
 import json
-from typing import Any, Dict, Literal
+from typing import Any, Dict, List, Literal
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -14,6 +14,8 @@ from service.cuda_service import rerank
 from shared.agents.agent_state import AgentState
 from shared.models.deepseek import get_deepseek
 from shared.text.stock_text import build_stock_profile_text
+from shared.metrics.prome import invoke_with_metrics
+
 from pydantic import BaseModel, Field
 from loguru import logger
 
@@ -46,7 +48,8 @@ def profile_node(state: AgentState):
         }}
     """)
 
-    model = get_deepseek()
+    model_name = "deepseek-chat"
+    model = get_deepseek(model=model_name)
     parser = JsonOutputParser(pydantic_object=SearchPlan)
     keywords = model.invoke([first_prompt]).content
     keywords = json.loads(keywords)["keywords"]
@@ -62,7 +65,7 @@ def profile_node(state: AgentState):
             if kw in searched_keywords:
                 continue
             searched_keywords.add(kw)
-            docs = search_stock_profile.invoke(kw)
+            docs = search_stock_profile.invoke({"query": kw, "topk": 20})
             if not docs:
                 continue
             if isinstance(docs, dict):
@@ -117,6 +120,7 @@ def profile_node(state: AgentState):
         ))
 
         response = model.invoke([prompt])
+        response = invoke_with_metrics(model, [prompt], "stock_profile", model_name)
 
         plan = parser.parse(response.content)
         if plan["finished"]:
@@ -129,8 +133,10 @@ def profile_node(state: AgentState):
     profiles = profiles.loc[profiles["rerank_score"].nlargest(20).index]
     profiles = profiles.drop(columns=["scope"])
     profiles = profiles.to_dict(orient="records")
-    logger.debug("finish profile node")
+    # logger.debug("finish profile node")
 
+    # generate_golden_standard_with_llm(state["user_question"])
+  
     return {
         "stock_profile": profiles,
         "rag_contexts": [profiles]
@@ -140,4 +146,14 @@ if __name__ == "__main__":
     
     state = AgentState()
     state["user_question"] = "国内AI应用前景如何，有什么投资建议，最好能帮我发现下半年最有可能暴增的冷门潜力股，而不是给我大家都知道的龙头股？"
-    print(profile_node(state).get("stock_profile"))
+    state["job_id"] = "profile_job"
+    state["thread_id"] = "profile_thread"
+    # print(profile_node(state).get("stock_profile"))
+
+    # golden_standard = generate_golden_standard_from_candidates(
+    #     state["user_question"]
+    # )
+
+    # golden_eval = DynamicGoldenStandard()
+    # golden = golden_eval.get_golden_standard(state["user_question"])
+    # print(golden)

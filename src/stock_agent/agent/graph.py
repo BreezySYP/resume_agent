@@ -1,8 +1,9 @@
 """src/stock_agent/agent/graph.py"""
 
+from uuid import uuid4
+
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import RetryPolicy
-from agent.error_handler import error_handler_middleware
 # 导入所有 node 函数
 from agent.nodes.supervisor_node import supervisor_node
 from agent.nodes.profile_node import profile_node
@@ -11,35 +12,28 @@ from agent.nodes.technical_node import technical_node
 from agent.nodes.news_node import news_node
 from agent.nodes.synthesizer_node import synthesizer_node
 from agent.nodes.reflection_node import reflection_node
+from agent.nodes.eval_node import eval_node
 from shared.agents.agent_state import AgentState
-from shared.agents.checkpoint import get_redis_checkpointer
+from shared.agents.checkpoint import get_aredis_checkpointer
 
 from event.event_manager import event
-from shared.models.deepseek import get_deepseek
-from shared.rag.eval import run_ragas
 
 
-def ragas(state: AgentState):
-    ragas_id = "f7ccbd38-414d-472e-a786-a859eb22d6c7"
-    contexts = [str(c) for c in state["rag_contexts"]]
-    
-    context_text = "\n".join(contexts) if contexts else "无检索内容"
-    run_ragas(state["user_question"], context_text, state["final_answer"], get_deepseek(), run_id=ragas_id)
-
-def build_investment_agent(checkpointer, job_id):
+def build_investment_agent(checkpointer):
     """生产级 Graph 构建函数"""
     workflow = StateGraph(AgentState)
     
     # 统一 retry 配置
     default_retry = RetryPolicy(max_attempts=3, retry_on=[Exception])  # 可自定义异常
     
-    workflow.add_node("supervisor", error_handler_middleware(supervisor_node), retry_policy=default_retry)
-    workflow.add_node("profile", error_handler_middleware(profile_node))
-    workflow.add_node("fundamental", error_handler_middleware(fundamental_node))
-    workflow.add_node("technical", error_handler_middleware(technical_node))
-    workflow.add_node("news", error_handler_middleware(news_node), retry_policy=RetryPolicy(max_attempts=5))  # news 重试更多
-    workflow.add_node("synthesizer", error_handler_middleware(synthesizer_node))
-    workflow.add_node("reflection", error_handler_middleware(reflection_node))
+    workflow.add_node("supervisor", supervisor_node, retry_policy=default_retry)
+    workflow.add_node("profile", profile_node)
+    workflow.add_node("fundamental", fundamental_node)
+    workflow.add_node("technical", technical_node)
+    workflow.add_node("news", news_node)
+    workflow.add_node("synthesizer", synthesizer_node)
+    workflow.add_node("reflection", reflection_node)
+    workflow.add_node("eval", eval_node)
     
     # 边（并行结构清晰）
     workflow.add_edge(START, "supervisor")
@@ -54,6 +48,7 @@ def build_investment_agent(checkpointer, job_id):
     workflow.add_edge("news", "synthesizer")
 
     workflow.add_edge("synthesizer", "reflection")
+    workflow.add_edge("eval", END)
 
     def should_continue(state: AgentState) -> str:
 
@@ -62,9 +57,7 @@ def build_investment_agent(checkpointer, job_id):
         retry_count = state.get("retry_count", 0)
         
         if retry_count >= 3 or "PASS" in last_reflection:
-            event.graph_finish(job_id, "END", state.get("final_answer", "获取最终答案失败，请查询日志"))
-            ragas(state=state)
-            return END   # 直接结束，不再回 synthesizer
+            return "eval"  
         
         return "synthesizer"
 
@@ -73,7 +66,7 @@ def build_investment_agent(checkpointer, job_id):
         should_continue,
         {
             "synthesizer": "synthesizer",
-            END: END
+            "eval": "eval" 
         }
     )
 
@@ -82,30 +75,40 @@ def build_investment_agent(checkpointer, job_id):
     )
 
 
-def ask_investment(question: str, job_id: str, thread_id: str = "default"):
+async def ask_investment(question: str, job_id: str, thread_id: str = "default"):
     """推荐入口"""
     config = {
         "configurable": {"thread_id": thread_id},
         "recursion_limit": 50,          # 防止无限循环
     }
     
-    with get_redis_checkpointer() as cp:
+    async with get_aredis_checkpointer() as cp:
         cp.setup()
-        agent = build_investment_agent(checkpointer=cp, job_id=job_id)
-        result = agent.invoke({"user_question": question, "thread_id": thread_id, "job_id": job_id}, config=config)
+        agent = build_investment_agent(checkpointer=cp)
+        result = await agent.ainvoke({"user_question": question, "thread_id": thread_id, "job_id": job_id}, config=config)
+
+    
+    event.graph_finish(job_id, "END", result.get("final_answer", "获取最终答案失败，请查询日志"))
     
     return result
 
 
 if __name__ == "__main__":
-    result = ask_investment("我现在重仓兆易创新，有什么建议？", "dummy", "debug")
+    from uuid import UUID
+    import asyncio
+    job_id = uuid4()
+    result = asyncio.run(ask_investment("下半年AI应用领域值得投资的股票有哪些？", job_id, "debug"))
     
     print(result.get("final_answer"))
     print(result["messages"][-1].content)
+
     from shared.db.redis import pop_queue
     while True:
         event = pop_queue("debug")
         if not event:
             break
         print(event)
+
+
+
 

@@ -121,17 +121,17 @@ def search_business_breakdown(stock_names: str):
 
 
 @tool
-def search_stock_profile(query: str):
+def search_stock_profile(query: str, topk: int=10):
     """根据用户的提问中提取出领域，作为query查找相对应的股票"""
     result = search_similar.search_with_rerank(
-        query, "stock_profile_hybrid", "stock_profile", build_stock_profile_text, 20
+        query, "stock_profile_hybrid", "stock_profile", build_stock_profile_text, topk
     )
     result["update_time"] = result["update_time"].dt.strftime("%Y-%m-%d %H:%M:%S")
     return result.to_dict(orient="records")
 
 
 @tool
-def search_news(stock_names: str):
+def search_news(stock_names: str, topk: int= 20):
     """
     输入：
         stock_names: 所涉及的股票们的名称，用空格隔开
@@ -139,7 +139,7 @@ def search_news(stock_names: str):
         返回关于这个题材或领域里相关的新闻或者所设计的企业的公告
     """
     result =  search_similar.search_with_rerank(
-        stock_names, "stock_news_hybrid", "stock_news", build_stock_news_text, 20
+        stock_names, "stock_news_hybrid", "stock_news", build_stock_news_text, topk
     )
     result["date"] = result["date"].dt.strftime("%Y-%m-%d %H:%M:%S")
     return result.to_dict(orient="records")

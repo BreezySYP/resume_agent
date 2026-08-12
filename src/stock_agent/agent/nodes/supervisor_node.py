@@ -5,8 +5,9 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.output_parsers import JsonOutputParser
 from agent.tools import time_tool
 from event.decorator import node
-from shared.agents.agent_state import AgentState
+from shared.agents.agent_state import CLEAR_MARK, AgentState
 from shared.models.deepseek import get_deepseek
+from shared.metrics.prome import invoke_with_metrics
 
 class AnalysisPlan(BaseModel):
     current_time: str = Field(...)
@@ -32,12 +33,17 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
         {AnalysisPlan.model_json_schema()}
     """)
 
-    model = get_deepseek(temperature=0.1)
+    model_name = "deepseek-chat"
+    model = get_deepseek(model=model_name, temperature=0.1)
     parser = JsonOutputParser(pydantic_object=AnalysisPlan)
     chain = model | parser
 
     try:
-        plan = chain.invoke([system_prompt, HumanMessage(content=state["user_question"])])
+        plan = invoke_with_metrics(
+            chain, 
+            [system_prompt, HumanMessage(content=state["user_question"])], 
+            "supervisor",
+            model_name=model_name)
         plan['current_time'] = currtime
     except Exception as e:
         plan = {"current_time": currtime, "plan_summary": "解析失败", "focus_areas": ["fundamental", "news"]}
@@ -46,5 +52,7 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
         "messages": [state["user_question"]],
         "plan": plan,
         "user_question": state["user_question"],
-        "current_time": currtime
+        "current_time": currtime,
+        "errors": [CLEAR_MARK],
+        "rag_contexts": [CLEAR_MARK]
     }
