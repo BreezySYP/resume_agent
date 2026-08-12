@@ -3,6 +3,7 @@ from event.decorator import node
 from shared.agents.agent_state import AgentState
 from shared.models.deepseek import get_deepseek
 from langchain_core.messages import SystemMessage
+from shared.metrics.prome import invoke_with_metrics
 
 @node(node_name="reflection", title="反射节点")
 def reflection_node(state: AgentState) -> Dict[str, Any]:
@@ -16,7 +17,8 @@ def reflection_node(state: AgentState) -> Dict[str, Any]:
             "retry_count": retry_count + 1,
         }
 
-    llm = get_deepseek(temperature=0.1)
+    model_name = "deepseek-chat"
+    llm = get_deepseek(model_name, temperature=0.1)
     
     prompt = f"""
         请严格评估以下投资分析输出质量：
@@ -32,7 +34,7 @@ def reflection_node(state: AgentState) -> Dict[str, Any]:
         否则输出具体改进建议。
     """
             
-    reflection = llm.invoke([SystemMessage(content=prompt)])
+    reflection = invoke_with_metrics(llm, [SystemMessage(content=prompt)], "reflection", model_name)
     
     reflection_text = reflection.content  # LLM 输出
     

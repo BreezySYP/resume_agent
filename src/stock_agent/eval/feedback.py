@@ -12,12 +12,13 @@ from datetime import datetime
 from eval.faithfulness import caculate_faithfulness_score
 
 from shared.rag.eval import push_to_langsmith
+from observe.metrics import track_eval_run, record_eval_scores
+from shared.metrics.prome import ainvoke_with_metrics
 
 _tracer = get_tracer("stock_agent.ragas")
 
 _SEARCH_WIDTH = 200
 
-model = get_deepseek(model="deepseek-chat")
 
 async def calculate_scores(state: AgentState):
     answer = state.get("final_answer")
@@ -55,30 +56,32 @@ async def calculate_scores(state: AgentState):
 
     async def get_relavance():
         logger.debug("get relavance")
-        result = await model.ainvoke(rel_prompt)
-        logger.debug("done get relavance")
+        model_name = "deepseek-chat"
+        model = get_deepseek(model=model_name)
+        result = await ainvoke_with_metrics(model, rel_prompt, "relavance", model_name)
         return float(result.content.strip()[:4])
-        
-    candidate = search_stock_profile.invoke({"query": question, "topk": _SEARCH_WIDTH})
 
-    (faith_score, results), goldenStandard, rel_score = await asyncio.gather(caculate_faithfulness_score(state),
-                                                  get_golden_standard(question, candidate), get_relavance())
-    retrived_codes = [profile["code"] for profile in stock_profile]
-    common_codes = set(goldenStandard) & set(retrived_codes)
-    profile_recall = ( len(common_codes) / len(goldenStandard) ) if goldenStandard else 0.0
-    profile_precision = (len(common_codes) / len(retrived_codes)) if retrived_codes else 0.0
+    with track_eval_run():
+        candidate = search_stock_profile.invoke({"query": question, "topk": _SEARCH_WIDTH})
 
-    scores = {
-        "faithfulness": faith_score,
-        "answer_relevancy": rel_score,
-        "profile_recall": profile_recall,
-        "profile_precision": profile_precision,
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "question": question[:80],
-    }
+        (faith_score, results), goldenStandard, rel_score = await asyncio.gather(caculate_faithfulness_score(state),
+                                                    get_golden_standard(question, candidate), get_relavance())
+        retrived_codes = [profile["code"] for profile in stock_profile]
+        common_codes = set(goldenStandard) & set(retrived_codes)
+        profile_recall = ( len(common_codes) / len(goldenStandard) ) if goldenStandard else 0.0
+        profile_precision = (len(common_codes) / len(retrived_codes)) if retrived_codes else 0.0
 
-    push_to_langsmith(scores, question, answer, run_id)
-    return scores
+        scores = {
+            "faithfulness": faith_score,
+            "answer_relevancy": rel_score,
+            "profile_recall": profile_recall,
+            "profile_precision": profile_precision,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "question": question[:80],
+        }
+        record_eval_scores(scores=scores)
+        push_to_langsmith(scores, question, answer, run_id)
+        return scores
 
 
 

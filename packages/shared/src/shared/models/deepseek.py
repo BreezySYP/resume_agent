@@ -15,6 +15,6 @@ def get_deepseek(model:str = "deepseek-v4-flash", temperature=0.0) -> ChatDeepSe
     )
 
 if __name__ == "__main__":
-    resp = get_deepseek().invoke("液冷数据中心龙头股有哪些")
-
+    model = get_deepseek()
+    resp = model.invoke("液冷数据中心龙头股有哪些")
     print(resp.content)

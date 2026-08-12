@@ -3,7 +3,7 @@ import asyncio
 from event.decorator import node
 from shared.agents.agent_state import AgentState
 from eval.feedback import calculate_scores
-
+from loguru import logger
 
 @node(node_name="evaluation", title="基本面数据节点")
 def eval_node(state: AgentState) -> dict:
@@ -12,6 +12,7 @@ def eval_node(state: AgentState) -> dict:
     contexts = state.get("rag_contexts") or []
 
     if not answer or not contexts:
+        logger.error("no answer or contexts for feedback")
         return {
             "ragas_result": {
                 "faithfulness": None,

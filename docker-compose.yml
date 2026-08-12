@@ -158,7 +158,21 @@ services:
       - "3200:3200"                       # Grafana 查询 trace
     networks: [agent-net]
     restart: unless-stopped
-
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: devagent-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks: [agent-net]
+    restart: unless-stopped
   grafana:
     image: grafana/grafana:latest
     container_name: devagent-grafana
@@ -196,6 +210,7 @@ volumes:
   minio_data:
   grafana_data:
   qdrant_data:
+  prometheus_data:
 
 networks:
   agent-net:

@@ -1,6 +1,6 @@
 """stock_dashboard/main.py — FastAPI 入口"""
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from api import agent_router
@@ -51,6 +51,17 @@ app.include_router(agent_router.router)
 def health_check():
     return {"status": "ok", "service": "stock-dashboard-api"}
 
+
+
+from observe.metrics import metrics_response_body, metrics_content_type
+
+
+@app.get("/metrics")
+def metrics():
+    return Response(
+        content=metrics_response_body(),
+        media_type=metrics_content_type(),
+    )
 
 if __name__ == "__main__":
     import uvicorn

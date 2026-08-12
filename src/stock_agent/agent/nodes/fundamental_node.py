@@ -14,7 +14,6 @@ from shared.models.deepseek import get_deepseek
 from event.decorator import node
 from loguru import logger
 
-
 FINANCIAL_FACTOR_EXPLAIN = """
     数学公式总结
     基础定义

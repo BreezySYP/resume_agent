@@ -5,12 +5,15 @@ from typing import List, Dict, Set
 from loguru import logger
 
 from shared.models.deepseek import get_deepseek
+from shared.metrics.prome import ainvoke_with_metrics
 
 _BATCH_LLM = 50
 _SCOPE_MAX_LENGTH = 100
 _MAX_CONCURRENCY = 5  # 最多 5 路并发
 
-model = get_deepseek(model="deepseek-chat")
+
+model_name = "deepseek-chat"
+model = get_deepseek(model=model_name)
 
 
 def _build_prompt(query: str, candidates: List[Dict]) -> str:
@@ -44,11 +47,7 @@ async def _select_one_batch(
         try:
             logger.debug("debug _select_one_batch")
             prompt = _build_prompt(query, batch)
-            response = await model.ainvoke(prompt)
-            if getattr(response, "usage_metadata", None):
-                u = response.usage_metadata
-                logger.debug("input_tokens: {}, output_tokens: {}, total_tokens: {}", 
-                              u.get("input_tokens"), u.get("output_tokens"), u.get("total_tokens"))
+            response = await ainvoke_with_metrics(model, prompt, "golden_standard", model_name)
             return json.loads(response.content)
         except Exception as e:
             # 单批失败不拖垮整体，按需改成 raise

@@ -14,6 +14,7 @@ from service.cuda_service import rerank
 from shared.agents.agent_state import AgentState
 from shared.models.deepseek import get_deepseek
 from shared.text.stock_text import build_stock_profile_text
+from shared.metrics.prome import invoke_with_metrics
 
 from pydantic import BaseModel, Field
 from loguru import logger
@@ -47,7 +48,8 @@ def profile_node(state: AgentState):
         }}
     """)
 
-    model = get_deepseek(model="deepseek-chat")
+    model_name = "deepseek-chat"
+    model = get_deepseek(model=model_name)
     parser = JsonOutputParser(pydantic_object=SearchPlan)
     keywords = model.invoke([first_prompt]).content
     keywords = json.loads(keywords)["keywords"]
@@ -118,6 +120,7 @@ def profile_node(state: AgentState):
         ))
 
         response = model.invoke([prompt])
+        response = invoke_with_metrics(model, [prompt], "stock_profile", model_name)
 
         plan = parser.parse(response.content)
         if plan["finished"]:

@@ -7,15 +7,17 @@ from shared.models.ollama_models import get_ollama_embedding
 from loguru import logger
 import asyncio
 import random
+from shared.metrics.prome import ainvoke_with_metrics
 
-model = get_deepseek(model="deepseek-chat")
+model_name = "deepseek-chat"
+model = get_deepseek(model=model_name)
 _MAX_CLAIM_NUM = 10
 embeder = get_ollama_embedding()
 _SAMPLE_SIZE = 100
 
 
-async def _chat(prompt: str, temperature: float = 0) -> str:
-    resp = await model.ainvoke([ prompt])
+async def _chat(prompt: str) -> str:
+    resp = await ainvoke_with_metrics(model, [ prompt], "faithfulness", model_name)
     return str(resp.content)
 
 
@@ -29,7 +31,6 @@ async def _extract_claims(answer: str, question:str, max_claims: int ) -> List[s
 
         用户问题：
         {question}
-
 
         
         回答：
@@ -83,14 +84,14 @@ async def _is_claim_supported(claim: str, evidence: List[str]) -> bool:
         {evidence_text}
 
         判断："""
-    ans = (await _chat(prompt, temperature=0)).lower()
+    ans = (await _chat(prompt)).lower()
     return ans.startswith("yes") or ans.startswith("是")
 
 async def _claim_ok(
-        claim, score, 
-        sem: asyncio.Semaphore,
-        sentences,
-        top_k
+    claim, score, 
+    sem: asyncio.Semaphore,
+    sentences,
+    top_k
 ):
     async with sem:
         logger.debug(" debug claim ", claim[:10])
@@ -102,8 +103,6 @@ async def _claim_ok(
             if score[j] >= 0.25
         ]
         ok = await _is_claim_supported(claim, relevant)
-        if ok:
-            supported += 1
         return {"claim": claim, "supported": ok, "evidence": relevant}
 
 async def caculate_faithfulness_score(

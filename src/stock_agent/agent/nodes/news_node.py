@@ -4,6 +4,7 @@ from shared.agents.agent_state import AgentState
 from shared.models.deepseek import get_deepseek
 from agent.tools import search_news, tav_search, time_tool
 from event.decorator import node
+from shared.metrics.prome import invoke_with_metrics
 
 @node(node_name="news", title="新闻数据节点")
 def news_node(state: AgentState) -> Dict[str, Any]:
@@ -12,8 +13,9 @@ def news_node(state: AgentState) -> Dict[str, Any]:
     
     current_time = state.get("current_time", time_tool.invoke(""))
     stock_names = " ".join([p.get("name", str(p)) for p in state.get("stock_profile", [])])
-    
-    model = get_deepseek(model="deepseek-chat", temperature=0.2)
+
+    model_name = "deepseek-chat"
+    model = get_deepseek(model=model_name, temperature=0.2)
     
     prompt = SystemMessage(content=f"""
         你是新闻分析师。
@@ -33,11 +35,16 @@ def news_node(state: AgentState) -> Dict[str, Any]:
     from langchain.agents import create_agent
     agent = create_agent(
         model=model,
-        tools=[search_news, tav_search],
+        # tools=[search_news, tav_search],
+        tools=[search_news],
         system_prompt=prompt
     )
     
-    result = agent.invoke({"messages": [HumanMessage(content=state["user_question"])]})
+    result = invoke_with_metrics(
+        agent, 
+        {"messages": [HumanMessage(content=state["user_question"])]}, 
+        "news", 
+        model_name)
     
     tool_outputs = []
     for msg in result["messages"]:
