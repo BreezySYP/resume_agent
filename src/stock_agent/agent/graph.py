@@ -4,7 +4,6 @@ from uuid import uuid4
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import RetryPolicy
-from agent.error_handler import error_handler_middleware
 # 导入所有 node 函数
 from agent.nodes.supervisor_node import supervisor_node
 from agent.nodes.profile_node import profile_node
@@ -15,7 +14,7 @@ from agent.nodes.synthesizer_node import synthesizer_node
 from agent.nodes.reflection_node import reflection_node
 from agent.nodes.eval_node import eval_node
 from shared.agents.agent_state import AgentState
-from shared.agents.checkpoint import get_redis_checkpointer
+from shared.agents.checkpoint import get_aredis_checkpointer
 
 from event.event_manager import event
 
@@ -27,14 +26,14 @@ def build_investment_agent(checkpointer):
     # 统一 retry 配置
     default_retry = RetryPolicy(max_attempts=3, retry_on=[Exception])  # 可自定义异常
     
-    workflow.add_node("supervisor", error_handler_middleware(supervisor_node), retry_policy=default_retry)
-    workflow.add_node("profile", error_handler_middleware(profile_node))
-    workflow.add_node("fundamental", error_handler_middleware(fundamental_node))
-    workflow.add_node("technical", error_handler_middleware(technical_node))
-    workflow.add_node("news", error_handler_middleware(news_node))  # news 重试更多
-    workflow.add_node("synthesizer", error_handler_middleware(synthesizer_node))
-    workflow.add_node("reflection", error_handler_middleware(reflection_node))
-    workflow.add_node("eval", error_handler_middleware(eval_node))
+    workflow.add_node("supervisor", supervisor_node, retry_policy=default_retry)
+    workflow.add_node("profile", profile_node)
+    workflow.add_node("fundamental", fundamental_node)
+    workflow.add_node("technical", technical_node)
+    workflow.add_node("news", news_node)
+    workflow.add_node("synthesizer", synthesizer_node)
+    workflow.add_node("reflection", reflection_node)
+    workflow.add_node("eval", eval_node)
     
     # 边（并行结构清晰）
     workflow.add_edge(START, "supervisor")
@@ -76,17 +75,17 @@ def build_investment_agent(checkpointer):
     )
 
 
-def ask_investment(question: str, job_id: str, thread_id: str = "default"):
+async def ask_investment(question: str, job_id: str, thread_id: str = "default"):
     """推荐入口"""
     config = {
         "configurable": {"thread_id": thread_id},
         "recursion_limit": 50,          # 防止无限循环
     }
     
-    with get_redis_checkpointer() as cp:
+    async with get_aredis_checkpointer() as cp:
         cp.setup()
         agent = build_investment_agent(checkpointer=cp)
-        result = agent.invoke({"user_question": question, "thread_id": thread_id, "job_id": job_id}, config=config)
+        result = await agent.ainvoke({"user_question": question, "thread_id": thread_id, "job_id": job_id}, config=config)
 
     
     event.graph_finish(job_id, "END", result.get("final_answer", "获取最终答案失败，请查询日志"))
@@ -96,8 +95,9 @@ def ask_investment(question: str, job_id: str, thread_id: str = "default"):
 
 if __name__ == "__main__":
     from uuid import UUID
+    import asyncio
     job_id = uuid4()
-    result = ask_investment("下半年AI应用领域值得投资的股票有哪些？", job_id, "debug")
+    result = asyncio.run(ask_investment("下半年AI应用领域值得投资的股票有哪些？", job_id, "debug"))
     
     print(result.get("final_answer"))
     print(result["messages"][-1].content)

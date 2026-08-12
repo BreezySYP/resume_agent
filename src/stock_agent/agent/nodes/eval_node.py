@@ -6,7 +6,7 @@ from eval.feedback import calculate_scores
 from loguru import logger
 
 @node(node_name="evaluation", title="基本面数据节点")
-def eval_node(state: AgentState) -> dict:
+async def eval_node(state: AgentState) -> dict:
     """在 final_answer 产生后执行"""
     answer = state.get("final_answer") or ""
     contexts = state.get("rag_contexts") or []
@@ -20,7 +20,7 @@ def eval_node(state: AgentState) -> dict:
             }
         }
 
-    scores = asyncio.run(calculate_scores(state))
+    scores = await calculate_scores(state)
 
     return {
         "ragas_result": {
