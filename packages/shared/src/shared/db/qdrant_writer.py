@@ -7,13 +7,8 @@ from loguru import logger
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct, SparseVector
 from shared.db.qdrant import ensure_dense_collection, ensure_hybrid_collection, get_qdrant_client
-from shared.models.ollama_models import get_ollama_embedding, get_embedding_dim
+from shared.models.ollama_models import get_ollama_embedding, get_embedding_dim, get_sparse_model
 import time
-
-
-@lru_cache(maxsize=1)
-def _sparse_model() -> SparseTextEmbedding:
-    return SparseTextEmbedding("Qdrant/bm25")
 
 
 def upsert_dense(df: pd.DataFrame, collection: str, build_text, get_payload, batch_size: int = 256, client: QdrantClient | None = None) -> None:
@@ -37,7 +32,7 @@ def upsert_hybrid(df: pd.DataFrame, collection: str, build_text, get_payload, ba
     """dense (ollama embedding) + sparse (BM25) 混合向量写入"""
     client = client or get_qdrant_client()
     model = get_ollama_embedding()
-    sparse_model = _sparse_model()
+    sparse_model = get_sparse_model()
     ensure_hybrid_collection(client, collection, get_embedding_dim())
 
     total = len(df)

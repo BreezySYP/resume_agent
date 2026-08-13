@@ -2,6 +2,7 @@
 from functools import lru_cache
 import time
 from typing import List
+from fastembed import SparseTextEmbedding
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_groq import ChatGroq
 from shared.configs.settings import OLLAMA_URL, LLM_MODEL, LLM_SQL, EMBED_MODEL, GROQ_API_KEY

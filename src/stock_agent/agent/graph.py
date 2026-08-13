@@ -12,6 +12,8 @@ from agent.nodes.technical_node import technical_node
 from agent.nodes.news_node import news_node
 from agent.nodes.synthesizer_node import synthesizer_node
 from agent.nodes.reflection_node import reflection_node
+from agent.nodes.memory_write_node import memory_write_node
+from agent.nodes.memory_recall_node import memory_recall_node
 from agent.nodes.eval_node import eval_node
 from shared.agents.agent_state import AgentState
 from shared.agents.checkpoint import get_aredis_checkpointer
@@ -34,9 +36,13 @@ def build_investment_agent(checkpointer):
     workflow.add_node("synthesizer", synthesizer_node)
     workflow.add_node("reflection", reflection_node)
     workflow.add_node("eval", eval_node)
+    workflow.add_node("memory_write", memory_write_node)
+    workflow.add_node("memory_recall", memory_recall_node)
+
     
     # 边（并行结构清晰）
-    workflow.add_edge(START, "supervisor")
+    workflow.add_edge(START, "memory_recall")
+    workflow.add_edge("memory_recall", "supervisor")
     workflow.add_edge("supervisor", "profile")
     
     workflow.add_edge("profile", "fundamental")
@@ -48,6 +54,7 @@ def build_investment_agent(checkpointer):
     workflow.add_edge("news", "synthesizer")
 
     workflow.add_edge("synthesizer", "reflection")
+    workflow.add_edge("memory_write", "eval")
     workflow.add_edge("eval", END)
 
     def should_continue(state: AgentState) -> str:
@@ -57,8 +64,7 @@ def build_investment_agent(checkpointer):
         retry_count = state.get("retry_count", 0)
         
         if retry_count >= 3 or "PASS" in last_reflection:
-            return "eval"  
-        
+            return "memory_write"  
         return "synthesizer"
 
     workflow.add_conditional_edges(
@@ -66,7 +72,7 @@ def build_investment_agent(checkpointer):
         should_continue,
         {
             "synthesizer": "synthesizer",
-            "eval": "eval" 
+            "memory_write": "memory_write" 
         }
     )
 

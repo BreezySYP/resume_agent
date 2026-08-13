@@ -35,3 +35,4 @@ class AgentState(TypedDict):
     thread_id: str
     job_id: str
     ragas_result: dict
+    memory_context: str

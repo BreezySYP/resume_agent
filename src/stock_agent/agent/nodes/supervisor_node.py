@@ -20,6 +20,9 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
     if state["messages"] and len(state["messages"]) >MAX_MEMORY:
         state["messages"] = state["messages"][-MAX_MEMORY:]
     currtime = time_tool.invoke("")
+
+    memory_ctx = state.get("memory_context") or "（暂无相关长期记忆）"
+    question = state["user_question"]
     
     system_prompt = SystemMessage(content=f"""
         你是一个专业的A股投资分析主管。
@@ -28,6 +31,10 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
         规则：
         1. 分析用户问题，输出结构化 JSON 分析计划。
         2. 明确 fundamental/technical/news 的优先级。
+
+        ## 用户问题: {question}
+
+        ## 用户长期/中期记忆: {memory_ctx}
 
         请严格按照以下 JSON 格式输出：
         {AnalysisPlan.model_json_schema()}
@@ -54,5 +61,6 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
         "user_question": state["user_question"],
         "current_time": currtime,
         "errors": [CLEAR_MARK],
-        "rag_contexts": [CLEAR_MARK]
+        "rag_contexts": [CLEAR_MARK],
+        "reflections": []
     }

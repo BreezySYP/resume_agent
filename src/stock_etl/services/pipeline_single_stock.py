@@ -20,7 +20,8 @@ from shared.text.stock_text import (build_stock_news_text, build_stock_profile_t
 from sources import capital_and_hot
 from services.data_loader import load_df
 from sources import financial_statement, history, news, profile
-from storage import code_checkpoint, mysql_writer, qdrant_writer
+from storage import code_checkpoint, mysql_writer
+import shared.db.qdrant_writer as qdrant_writer
 from storage import step_checkpoint
 from sqlalchemy import text
 from trading_calendar import next_trading_day

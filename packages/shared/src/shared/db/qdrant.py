@@ -34,3 +34,5 @@ def ensure_hybrid_collection(client: QdrantClient, collection: str, dim: int) ->
         vectors_config={"dense": VectorParams(size=dim, distance=Distance.COSINE)},
         sparse_vectors_config={"sparse": SparseVectorParams(modifier=Modifier.IDF)},
     )
+
+
