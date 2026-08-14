@@ -1,19 +1,29 @@
 """shared/configs/settings.py — 全局配置（pydantic-settings，所有服务共用）"""
 
 from functools import lru_cache
+from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# 把仓库根目录 `.env` 注入 os.environ（Tavily / LangSmith / OTel 等仍通过 os.getenv 读取），
+# find_dotenv 从本文件所在目录向上查找，与进程启动目录无关。
+# 优先级：真实环境变量（容器 -e / compose environment） > `.env` > 代码默认值。
+load_dotenv(override=False)
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[5]
 
 
 class Settings(BaseSettings):
     """集中管理所有服务的环境变量配置。
 
-    真实环境变量的优先级高于 `.env` 文件；`.env` 不存在时静默忽略。
+    优先级：真实环境变量（容器 -e / compose environment） > `.env` 文件 > 代码默认值。
+    默认值只是兜底，容器化部署时请通过环境变量或 .env 覆盖；`.env` 不存在时静默忽略。
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )

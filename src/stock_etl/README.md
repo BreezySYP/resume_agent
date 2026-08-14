@@ -1,62 +1,69 @@
 # stock_etl
 
-A 股股票数据 ETL：拉取行情/财报/资讯 → 计算因子 → 写入 MySQL / Qdrant。
+A 股股票数据 ETL：抓取行情 / 财报 / 资讯 → 计算因子 → 写入 MySQL / Qdrant。
 `stock_agent` 只负责 Agent 推理与检索，所有数据采集和因子计算都在本项目完成。
 
 ## 目录结构
 
-```
+```text
 stock_etl/
-├── sources/        # 数据源抓取（history/tick/news/profile/financial_statement/capital_and_hot）
-├── factors/        # 纯函数式因子计算（technical / financial_feature / financial_factor / composite）
-├── storage/        # 写入层（mysql_writer.py / qdrant_writer.py）
-├── research/        # 因子回测与诊断（非每日例行任务）
-├── data_loader.py  # 带本地 CSV 缓存的读取层，给 research/ 用
-├── pipeline.py      # 唯一入口：组合 sources -> factors -> storage
-└── schema.sql        # MySQL 建表语句
+├── sources/            # 数据源抓取（history / tick / news / profile / financial_statement / capital_and_hot）
+├── factors/            # 纯函数式因子计算（technical / financial_feature / financial_factor / composite）
+├── services/           # 编排层：pipeline_single_stock.py（各 step 实现）、etl_service.py（任务触发）、data_loader.py
+├── storage/            # 写入层（mysql_writer.py）+ 断点续跑（step_checkpoint.py / code_checkpoint.py）
+├── research/           # 因子回测与诊断（非每日例行任务）
+├── router/             # FastAPI 路由（etl_router.py）
+├── main.py             # API 入口
+├── constants.py        # step 定义（STEPS_META / DAILY_STEPS / SEASON_STEPS）
+└── schema.sql          # MySQL 建表语句
 ```
 
-## 每日例行入口
+## 运行
+
+### API（推荐入口）
 
 ```bash
-# 默认: history -> technical -> composite
-uv run python -m pipeline
-
-# 自定义步骤
-uv run python -m pipeline --steps history,technical,financial_feature,financial_factor,composite
-
-# 全部步骤（含低频的 profile/news/financial_statement/qdrant_sync）
-uv run python -m pipeline --steps all
+cd src/stock_etl
+uv run uvicorn main:app --host 0.0.0.0 --port 8011
 ```
 
-可选 step：`history` `technical` `financial_feature` `financial_factor` `composite`
-`capital_hot` `financial_statement` `profile` `news` `qdrant_sync`
+Swagger 文档：<http://localhost:8011/docs>
 
-- `financial_statement` / `profile` / `news`：低频抓取（建议按周/季度跑），数据量大、接口易触发频控。
-- `qdrant_sync`：把 MySQL 中的新闻/主营业务画像同步到 Qdrant 混合向量库，供 `stock_agent` 检索。
+### API 端点
 
-## 通用代码归属
+- `POST /api/etl/trigger/stock`：触发单股一个或多个 step（`code` + `steps`）。
+- `POST /api/etl/trigger/all`：触发全量 ETL，`mode=daily`（每日）或 `mode=season`（含季报财务因子），
+  也可用 `steps` 自定义。
+- `GET /api/etl/steps`：列出所有可用 step 定义与分组。
+- `GET /api/etl/stream/{job_id}`：SSE 订阅任务实时进度。
 
-- 股票代码规则 (`add_prefix`/`remove_prefix`)、MySQL 连接池、Qdrant client、Redis 缓存装饰器、
-  文本拼装函数等被 `stock_agent` 和 `stock_etl` 共用的代码统一放在 `packages/shared`。
+```bash
+curl -X POST http://localhost:8011/api/etl/trigger/all \
+  -H 'Content-Type: application/json' -d '{"mode": "daily"}'
+```
+
+## Steps
+
+定义在 `constants.py`：
+
+- daily：`history` `technical` `capital_hot` `profile` `news` `qdrant_profile_sync` `qdrant_news_sync`
+- season：在 daily 基础上增加 `financial_statement` `financial_feature` `financial_factor` `composite`
+- 单股可触发（`PER_STOCK_STEPS`）：`history` `financial_statement` `profile` `news`
+
+各 step 的具体实现位于 `services/pipeline_single_stock.py`，可按需直接 import 调用。
 
 ## 断点续跑（etl_checkpoint）
 
-`schema.sql` 新增了 `etl_checkpoint` 表，按 `step` 记录 `start_date` / `start_code`：
+`schema.sql` 中的 `etl_checkpoint` 表按 `step` 记录 `start_date` / `start_code`，
+逐代码扫描类 step 每处理完一只股票就写入断点；进程崩溃后重跑同一 step 会从断点继续。
 
-```sql
-CREATE TABLE etl_checkpoint (
-    step VARCHAR(50) PRIMARY KEY,
-    start_date DATE,
-    start_code VARCHAR(20),
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-```
+- `history`：跑完一轮后 `start_date` 推进到本次 `end_date`，下次默认拉增量。
+- `financial_statement` / `profile` / `news`：跑完一轮全市场后清空断点，下次从头全量刷新。
 
-逐代码扫描类的 step（`history` `financial_statement` `profile` `news`）会在每只股票处理完后写入
-`start_code`；进程中途崩溃后重新运行同一 step，会自动从断点继续，不用每次从代码 `000000` 重头跑。
+读写封装在 `storage/step_checkpoint.py`（`get_checkpoint` / `save_checkpoint` / `clear_checkpoint`）和
+`storage/code_checkpoint.py`（按股票代码断点）。
 
-- `history`：成功跑完一轮后会把 `start_date` 推进到本次的 `end_date`，下次默认从这里继续拉增量。
-- `financial_statement` / `profile` / `news`：跑完一轮全市场后会清空断点，下次重新从头开始全量刷新。
+## 依赖
 
-读写封装在 `storage/checkpoint.py`：`get_checkpoint(step)` / `save_checkpoint(step, ...)` / `clear_checkpoint(step)`。
+- MySQL（写入 / 断点）、Redis（SSE 事件队列）、Qdrant（向量同步）、akshare / baostock（数据源）
+- 配置统一读取仓库根 `.env`，见 `.env.example` 模板
