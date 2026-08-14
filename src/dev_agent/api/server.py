@@ -1,51 +1,15 @@
 """api/server.py — Dev Agent 入口
-启动 UI:   streamlit run api/server.py
-启动 API:  uv run langgraph dev --port 8003
+启动 API: uv run langgraph dev --port 8003（langgraph.json 引用 ./api/server.py:graph）
+启动 UI:  python -m api.server
 """
-from langsmith import traceable
-from langchain_core.messages import HumanMessage
-from langgraph.checkpoint.redis import RedisSaver
-from shared.configs.settings import REDIS_URL, GRAPH_CONFIG
 from graph.workflow import build_graph
+from langgraph.checkpoint.redis import RedisSaver
+from shared.configs.settings import REDIS_URL
 from ui.streamlit_app import run_ui
-from loguru import logger
 
-@traceable
-def run() -> None:
-    with RedisSaver.from_conn_string(REDIS_URL) as cp:
-        cp.setup()
-        agent = build_graph().compile(checkpointer=cp)
-        question = "这个月股票涨的比较厉害的10支股票，列出来"
-        # run_ui(agent)
-        result = agent.invoke(
-            {
-                
-                "messages":      [HumanMessage(content=question)],
-                "user_question":  question ,          # entry_node 会自动提取
-            },
-            config=GRAPH_CONFIG,
-        )
-        logger.info(result)
-
-
-def clear_checkpoint():
-    from redis import Redis
-    r = Redis.from_url(REDIS_URL)
-    keys = r.keys("checkpoint:*")
-    if keys:
-        r.delete(*keys)
-        logger.info(f"✅ 已清除 {len(keys)} 个 checkpoint 键")
-
-
-# LangGraph CLI 识别此变量
-
-
-
-# with RedisSaver.from_conn_string(REDIS_URL) as _cp:
-#     _cp.setup()
-#     graph = build_graph().compile(checkpointer=_cp)
-
+with RedisSaver.from_conn_string(REDIS_URL) as checkpointer:
+    checkpointer.setup()
+    graph = build_graph().compile(checkpointer=checkpointer)
 
 if __name__ == "__main__":
-    clear_checkpoint()
-    run()
+    run_ui(graph)

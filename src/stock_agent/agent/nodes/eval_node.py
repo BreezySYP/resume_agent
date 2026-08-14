@@ -1,9 +1,9 @@
-import asyncio
 
-from event.decorator import node
-from shared.agents.agent_state import AgentState
 from eval.feedback import calculate_scores
+from event.decorator import node
 from loguru import logger
+from shared.agents.agent_state import AgentState
+
 
 @node(node_name="evaluation", title="基本面数据节点")
 async def eval_node(state: AgentState) -> dict:

@@ -1,8 +1,9 @@
 """shared/configs/tracing.py — OpenTelemetry 全局初始化"""
 from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
 from shared.configs.settings import TEMPO_URL
 
 _provider = TracerProvider()

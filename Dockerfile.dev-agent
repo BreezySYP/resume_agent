@@ -5,14 +5,13 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-# 复制整个 monorepo（构建上下文是根目录）
-COPY pyproject.toml .
-COPY src/shared ./src/shared
-COPY src/services/dev-agent ./src/services/dev-agent
+# 复制整个 workspace（uv 需要解析所有成员包）
+COPY pyproject.toml uv.lock ./
+COPY packages/shared ./packages/shared
+COPY src ./src
 
-# 安装 dev-agent 及其依赖（包含 shared）
-RUN uv sync --package dev-agent --no-dev
+RUN uv sync --package dev_agent --no-dev
 
-WORKDIR /app/src/services/dev-agent
+WORKDIR /app/src/dev_agent
 EXPOSE 8003
-CMD ["uv", "run", "--package", "dev-agent", "langgraph", "dev", "--port", "8003"]
+CMD ["uv", "run", "langgraph", "dev", "--port", "8003", "--host", "0.0.0.0"]

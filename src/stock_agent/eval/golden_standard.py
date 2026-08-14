@@ -1,11 +1,11 @@
 import asyncio
 import json
-from typing import List, Dict, Set
+from functools import lru_cache
+from typing import Dict, List, Set
 
 from loguru import logger
-
-from shared.models.deepseek import get_deepseek
 from shared.metrics.prome import ainvoke_with_metrics
+from shared.models.deepseek import get_deepseek
 
 _BATCH_LLM = 50
 _SCOPE_MAX_LENGTH = 100
@@ -13,7 +13,11 @@ _MAX_CONCURRENCY = 5  # 最多 5 路并发
 
 
 model_name = "deepseek-chat"
-model = get_deepseek(model=model_name)
+
+
+@lru_cache(maxsize=1)
+def _get_model():
+    return get_deepseek(model=model_name)
 
 
 def _build_prompt(query: str, candidates: List[Dict]) -> str:
@@ -47,7 +51,7 @@ async def _select_one_batch(
         try:
             logger.debug("debug _select_one_batch")
             prompt = _build_prompt(query, batch)
-            response = await ainvoke_with_metrics(model, prompt, "golden_standard", model_name)
+            response = await ainvoke_with_metrics(_get_model(), prompt, "golden_standard", model_name)
             return json.loads(response.content)
         except Exception as e:
             # 单批失败不拖垮整体，按需改成 raise

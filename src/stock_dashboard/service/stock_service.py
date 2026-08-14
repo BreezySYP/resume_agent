@@ -1,11 +1,11 @@
 """services/stock_service.py — 股票数据查询"""
 from __future__ import annotations
-import json
-from typing import List, Optional
+
+from typing import List
+
+from shared.db.redis import redis_cache
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from loguru import logger
-from shared.db.redis import redis_cache, redis_client
 
 STOCK_STEPS = ["history", "financial_statement", "profile", "news", "technical"]
 
@@ -31,24 +31,6 @@ def get_stock_list(db: Session, page: int = 1, page_size: int = 50, keyword: str
     """
     offset = (page - 1) * page_size
 
-    # # 基础列表
-    # where = "WHERE CAST(code AS CHAR) LIKE :kw OR name LIKE :kw" if keyword else ""
-    # kw    = f"%{keyword}%"
-    # count_sql = text(f"""
-    #     SELECT COUNT(DISTINCT code) FROM history {where}
-    # """)
-    # list_sql = text(f"""
-    #     SELECT
-    #         CAST(h.code AS CHAR)  AS code,
-    #         MAX(CAST(h.name AS CHAR)) AS name,
-    #         MAX(h.close) OVER (PARTITION BY h.code ORDER BY h.date DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS latest_close,
-    #         MAX(h.date)  AS latest_date
-    #     FROM history h
-    #     {where}
-    #     GROUP BY h.code
-    #     ORDER BY h.code
-    #     LIMIT :limit OFFSET :offset
-    # """)
     count_sql = text("SELECT COUNT(DISTINCT code) FROM history")
     list_sql = text("""
         SELECT
@@ -66,8 +48,6 @@ def get_stock_list(db: Session, page: int = 1, page_size: int = 50, keyword: str
         """)
 
     params = {"limit": page_size, "offset": offset}
-    # if keyword:
-    #     params["kw"] = kw
 
     with db as session:
         total  = session.execute(count_sql, params).scalar() or 0

@@ -1,19 +1,17 @@
 
-from loguru import logger
-
 import asyncio
-from shared.agents.agent_state import AgentState
-from shared.models.deepseek import get_deepseek
-from shared.models.ollama_models import get_llm
-from shared.configs.tracing import get_tracer, span_error
-from eval.golden_standard import get_golden_standard
-from agent.tools import search_stock_profile
 from datetime import datetime
-from eval.faithfulness import caculate_faithfulness_score
 
-from shared.rag.eval import push_to_langsmith
-from observe.metrics import track_eval_run, record_eval_scores
+from agent.tools import search_stock_profile
+from eval.faithfulness import caculate_faithfulness_score
+from eval.golden_standard import get_golden_standard
+from loguru import logger
+from observe.metrics import record_eval_scores, track_eval_run
+from shared.agents.agent_state import AgentState
+from shared.configs.tracing import get_tracer
 from shared.metrics.prome import ainvoke_with_metrics
+from shared.models.deepseek import get_deepseek
+from shared.rag.eval import push_to_langsmith
 
 _tracer = get_tracer("stock_agent.ragas")
 
@@ -23,8 +21,6 @@ _SEARCH_WIDTH = 200
 async def calculate_scores(state: AgentState):
     answer = state.get("final_answer")
     question = state.get("user_question")
-    rag_contexts = state.get("rag_contexts")
-    context_text = "\n".join([str(r) for r in rag_contexts]) if rag_contexts else ""
     stock_profile = state.get("stock_profile")
     run_id = state.get("job_id")
 
@@ -33,19 +29,7 @@ async def calculate_scores(state: AgentState):
         return []
     # stock_news = state.get("stock_news")
         
-    # 1. Faithfulness：答案是否被 context 支持
-    faith_prompt = f"""请判断下面的回答是否完全基于给定的上下文，没有编造信息。
-        只输出 0 到 1 的分数（1 表示完全忠实，0 表示严重幻觉）。
-
-        上下文：
-        {context_text}
-
-        回答：
-        {answer}
-
-        分数："""
-
-            # 2. Answer Relevancy：回答是否切题
+    # 2. Answer Relevancy：回答是否切题
     rel_prompt = f"""请判断下面的回答与问题的相关程度。
         只输出 0 到 1 的分数（1 表示非常相关）。
 

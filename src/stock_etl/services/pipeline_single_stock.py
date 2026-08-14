@@ -4,26 +4,27 @@
     uv run python pipeline.py --steps history,technical,composite
     uv run python pipeline.py --steps all
 """
-import argparse
 import datetime
 
 import pandas as pd
+import shared.db.qdrant_writer as qdrant_writer
 from factors.composite import build_composite_factor
 from factors.financial_factor import build_financial_factor
 from factors.financial_feature import build_financial_features
 from factors.technical import build_technical_factor
 from loguru import logger
-from shared.code_rule import add_prefix
-from shared.db.mysql import engine, execute_query
-from shared.text.stock_text import (build_stock_news_text, build_stock_profile_text,
-                                     get_stock_news_payload, get_stock_profile_payload)
-from sources import capital_and_hot
 from services.data_loader import load_df
-from sources import financial_statement, history, news, profile
-from storage import code_checkpoint, mysql_writer
-import shared.db.qdrant_writer as qdrant_writer
-from storage import step_checkpoint
+from shared.code_rule import add_prefix
+from shared.db.mysql import engine
+from shared.text.stock_text import (
+    build_stock_news_text,
+    build_stock_profile_text,
+    get_stock_news_payload,
+    get_stock_profile_payload,
+)
+from sources import capital_and_hot, financial_statement, history, news, profile
 from sqlalchemy import text
+from storage import code_checkpoint, mysql_writer, step_checkpoint
 from trading_calendar import next_trading_day
 
 QDRANT_NEWS_COLLECTION = "stock_news_hybrid"

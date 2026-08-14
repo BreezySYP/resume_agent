@@ -1,23 +1,31 @@
-import re
-from typing import List, Tuple, Optional
-import numpy as np
-from shared.agents.agent_state import AgentState
-from shared.models.deepseek import get_deepseek
-from shared.models.ollama_models import get_ollama_embedding
-from loguru import logger
 import asyncio
 import random
+import re
+from functools import lru_cache
+from typing import List
+
+import numpy as np
+from loguru import logger
+from shared.agents.agent_state import AgentState
 from shared.metrics.prome import ainvoke_with_metrics
+from shared.models.deepseek import get_deepseek
+from shared.models.ollama_models import get_ollama_embedding
 
 model_name = "deepseek-chat"
-model = get_deepseek(model=model_name)
+
+
+@lru_cache(maxsize=1)
+def _get_model():
+    return get_deepseek(model=model_name)
+
+
 _MAX_CLAIM_NUM = 10
 embeder = get_ollama_embedding()
 _SAMPLE_SIZE = 100
 
 
 async def _chat(prompt: str) -> str:
-    resp = await ainvoke_with_metrics(model, [ prompt], "faithfulness", model_name)
+    resp = await ainvoke_with_metrics(_get_model(), [prompt], "faithfulness", model_name)
     return str(resp.content)
 
 
@@ -146,7 +154,7 @@ async def caculate_faithfulness_score(
 
     results = await asyncio.gather(*jobs)
 
-    return sum([ 1 for r in results if r["supported"] == True]) / len(results), results
+    return sum([ 1 for r in results if r["supported"] is True]) / len(results), results
 
 
 if __name__ == "__main__":

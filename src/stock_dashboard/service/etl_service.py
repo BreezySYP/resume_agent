@@ -1,14 +1,13 @@
 """services/etl_service.py — ETL 任务触发 & 状态管理"""
 from __future__ import annotations
+
 import asyncio
 import datetime
-import importlib
-import sys
-import os
-from typing import List, Callable, AsyncGenerator
+from typing import AsyncGenerator
+
+from loguru import logger
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from loguru import logger
 
 # ETL step 定义（和 pipeline.py 保持一致）
 STEPS_META = {
@@ -81,6 +80,12 @@ async def _push_event(job_id: int, code: str, step: str,
             "job_id": job_id, "code": code, "step": step,
             "status": status, "message": message, "progress": progress,
         })
+
+
+def _get_pipeline():
+    """动态加载 stock_etl 的 pipeline 模块（cwd 需为 src/stock_etl）。"""
+    import importlib
+    return importlib.import_module("pipeline")
 
 
 async def run_step_async(db: Session, job_id: int,
@@ -172,5 +177,4 @@ def get_job_logs(db: Session, code: str = None,
     rows = db.execute(sql, params).mappings().fetchall()
     return [dict(r) for r in rows]
 
-PER_STOCK_STEPS = ["history", "profile", "news"]
 

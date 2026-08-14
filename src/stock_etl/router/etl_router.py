@@ -1,33 +1,41 @@
-import asyncio
-from typing import AsyncGenerator, List, Optional
+"""router/etl_router.py — ETL 触发 & SSE 进度推送"""
+from typing import List, Optional
+from uuid import uuid4
 
+from constants import (
+    DAILY_STEPS,
+    ETL_QUEUE_PREFIX,
+    PER_STOCK_STEPS,
+    SEASON_STEPS,
+    STEPS_META,
+)
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from constants import DAILY_STEPS, SEASON_STEPS, STEPS_META, ETL_QUEUE_PREFIX
-from services.etl_service import run_all, push_event, run_code
+from services.etl_service import run_all, run_code
 from shared.db.redis import sse_stream
-from uuid import uuid4
 
 router = APIRouter(prefix="/api/etl", tags=["ETL 任务"])
+
 
 class TriggerResponse(BaseModel):
     job_ids: list[str]
     message: str
 
+
 class TriggerAllRequest(BaseModel):
-    mode:  str        = Field("daily", description="daily 或 season")
-    job_id: str       = Field(str(uuid4()), description="任务 ID，默认随机生成")    
+    mode: str = Field("daily", description="daily 或 season")
+    job_id: str = Field(default_factory=lambda: str(uuid4()), description="任务 ID，默认随机生成")
     steps: Optional[List[str]] = Field(None, description="自定义 step 列表，为空则按 mode 默认")
 
 
-PER_STOCK_STEPS = ["history", "profile", "news"]
 class TriggerStockRequest(BaseModel):
-    code:  str        = Field(..., description="股票代码，如 600519")
-    steps: List[str]  = Field(..., description=f"可选 step: {list(PER_STOCK_STEPS)}")
+    code: str = Field(..., description="股票代码，如 600519")
+    steps: List[str] = Field(..., description=f"可选 step: {list(PER_STOCK_STEPS)}")
+
 
 @router.post(
-    "/trigger/stock", 
+    "/trigger/stock",
     response_model=TriggerResponse,
     description=f"""
         为指定股票触发一个或多个 ETL step。
@@ -35,15 +43,13 @@ class TriggerStockRequest(BaseModel):
         支持单股触发的 step：`{PER_STOCK_STEPS}`
 
         触发后返回 job_ids，可通过 `/api/etl/stream/{{job_id}}` 订阅 SSE 实时进度。
-    """)
-def trigger_stock_etl(
-    req: TriggerStockRequest,
-    background: BackgroundTasks 
-):
-    
+    """,
+)
+def trigger_stock_etl(req: TriggerStockRequest, background: BackgroundTasks):
     job_id = str(uuid4())
     background.add_task(run_code, job_id, req.code, req.steps)
     return TriggerResponse(job_ids=[job_id], message="Finished run steps for code")
+
 
 @router.get(
     "/steps",
@@ -53,10 +59,10 @@ def trigger_stock_etl(
 def list_steps():
     return [
         {
-            "step":          step,
-            "label":         meta["label"],
-            "group":         meta["group"],
-            "per_stock":     step in PER_STOCK_STEPS,
+            "step": step,
+            "label": meta["label"],
+            "group": meta["group"],
+            "per_stock": step in PER_STOCK_STEPS,
         }
         for step, meta in STEPS_META.items()
     ]
@@ -66,31 +72,19 @@ def list_steps():
     "/stream/{job_id}",
     summary="SSE 实时进度订阅",
     description="""
-            通过 Server-Sent Events (SSE) 订阅指定任务的实时进度。
+        通过 Server-Sent Events (SSE) 订阅指定任务的实时进度。
 
-            连接后会持续收到事件，直到任务完成或失败。
-
-            事件格式：
-            ```json
-            {
-            "job_id": 1,
-            "code": "600519",
-            "step": "history",
-            "status": "running|success|failed",
-            "message": "描述信息",
-            "progress": 0.5
-            }
-            ```
-        """,
-        response_class=StreamingResponse,
-    )
+        连接后会持续收到事件，直到任务完成或失败。
+    """,
+    response_class=StreamingResponse,
+)
 async def stream_job(job_id: str):
     return StreamingResponse(
         sse_stream(job_id, ETL_QUEUE_PREFIX),
         media_type="text/event-stream",
         headers={
-            "Cache-Control":               "no-cache",
-            "X-Accel-Buffering":           "no",
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
             "Access-Control-Allow-Origin": "*",
         },
     )
@@ -107,13 +101,10 @@ async def stream_job(job_id: str):
         - `mode=season`：执行季报 step（包含 financial_statement / feature / factor / composite）
         - 也可以通过 `steps` 字段自定义 step 列表
 
-        触发后返回 job_ids，可通过 `/api/etl/stream/{job_id}` 订阅 SSE 实时进度。
+        触发后返回 job_ids，可通过 `/api/etl/stream/{{job_id}}` 订阅 SSE 实时进度。
     """,
 )
-async def trigger_all(
-    req: TriggerAllRequest,
-    background: BackgroundTasks
-):
+async def trigger_all(req: TriggerAllRequest, background: BackgroundTasks):
     if req.steps:
         steps = req.steps
     elif req.mode == "season":
@@ -128,5 +119,5 @@ async def trigger_all(
     background.add_task(run_all, req.job_id, steps)
     return TriggerResponse(
         job_ids=[req.job_id],
-        message=f"已创建 {len([req.job_id])} 个全量任务（mode={req.mode}）"
+        message=f"已创建 1 个全量任务（mode={req.mode}）",
     )

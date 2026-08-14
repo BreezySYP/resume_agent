@@ -1,14 +1,14 @@
 # agent/nodes/synthesizer_node.py
 from typing import Any, Dict
-from pydantic import BaseModel, Field
-from langchain_core.messages import HumanMessage, SystemMessage
+
 from event.decorator import node
-from shared.agents.agent_state import AgentState
-from shared.models.deepseek import get_deepseek
+from langchain_core.messages import SystemMessage
 from langchain_core.output_parsers import JsonOutputParser
-from agent.nodes.technical_node import TECHNICAL_EXPLAIN
-from agent.nodes.fundamental_node import FINANCIAL_FACTOR_EXPLAIN
+from pydantic import BaseModel, Field
+from shared.agents.agent_state import AgentState
 from shared.metrics.prome import invoke_with_metrics
+from shared.models.deepseek import get_deepseek
+
 
 class InvestmentRecommendation(BaseModel):
     markdown_report: str = Field(..., description="给用户看的完整详尽的 Markdown 报告")
@@ -34,6 +34,7 @@ def synthesizer_node(state: AgentState) -> Dict[str, Any]:
         - 基本面：{state.get("stock_financial_factor", [])}
         - 新闻分析：{state.get("news_analysis", "")}
         - 用户问题：{state.get("user_question", "")}
+        - 中长记忆: {state.get("memory_context", "")}
 
         严格按照以下 JSON Schema 输出：
         {InvestmentRecommendation.model_json_schema()}

@@ -1,17 +1,15 @@
 # shared/events/decorator.py
 
+import inspect
 from datetime import date, datetime
 from decimal import Decimal
 from functools import wraps
-import inspect
-import traceback
 
 import numpy as np
 import pandas as pd
 from event.event_manager import event
-from shared.configs.tracing import get_tracer, span_error
-from langchain_core.messages import  SystemMessage
 from loguru import logger
+from shared.configs.tracing import get_tracer, span_error
 
 _tracer = get_tracer("agent.nodes")
 
@@ -48,8 +46,8 @@ def node(node_name: str, title: str):
         if inspect.iscoroutinefunction(func):
             @wraps(func)
             async def wrapper(state, *args, **kwargs):
-                thread_id = state["thread_id"]
-                job_id = state["job_id"]
+                thread_id = state.get("thread_id", "")
+                job_id = state.get("job_id", "")
                 event.node_start(
                     job_id,
                     node_name,
@@ -80,8 +78,8 @@ def node(node_name: str, title: str):
             return wrapper
         @wraps(func)
         def sync_wrapper(state, *args, **kwargs):
-            thread_id = state["thread_id"]
-            job_id = state["job_id"]
+            thread_id = state.get("thread_id", "")
+            job_id = state.get("job_id", "")
 
             event.node_start(
                 job_id,

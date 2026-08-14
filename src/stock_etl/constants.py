@@ -28,4 +28,4 @@ SEASON_STEPS = ["history", "technical", "financial_statement", "financial_featur
                 "qdrant_profile_sync", "qdrant_news_sync"]
 
 
-ETL_QUEUE_PREFIX = "pipline"
+ETL_QUEUE_PREFIX = "pipeline"

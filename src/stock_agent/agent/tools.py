@@ -1,15 +1,16 @@
 """agent/tools.py — Stock Agent 工具集"""
 import datetime
+import os
+from functools import lru_cache
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+from core.minio_file import list_skills as _list_skills
+from core.minio_file import load_skill as _load_skill
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langchain_tavily import TavilySearch
 from loguru import logger
-
-from core.minio_file import list_skills as _list_skills
-from core.minio_file import load_skill as _load_skill
 from service import search_similar
 from shared.db.mysql import engine, execute_query, get_schema, get_tables
 from shared.models.deepseek import get_deepseek
@@ -167,10 +168,19 @@ def stock_technical_analysis(query: str):
     return df.to_dict(orient="records")
 
 
-tav_search = TavilySearch(max_results=5, search_depth="advanced", include_answer=True)
+@lru_cache(maxsize=1)
+def get_tavily_search():
+    """Tavily 搜索工具；未配置 TAVILY_API_KEY 时返回 None，避免服务启动失败。"""
+    if not os.getenv("TAVILY_API_KEY"):
+        logger.warning("TAVILY_API_KEY 未配置，Tavily 搜索不可用")
+        return None
+    return TavilySearch(max_results=5, search_depth="advanced", include_answer=True)
+
+
+tav_search = get_tavily_search()
 
 DB_TOOLS = [get_db_schema, execute_sql, query_database]
-SEARCH_TOOLS = [tav_search]
+SEARCH_TOOLS = [t for t in [tav_search] if t is not None]
 SKILL_TOOLS = [load_skill, list_skills, time_tool]
 SIMILAR_STOCK_INFO_TOOLS = [search_business_breakdown, search_stock_profile, search_news, stock_financial_analysis, stock_technical_analysis]
 ALL_TOOLS = DB_TOOLS + SEARCH_TOOLS + SKILL_TOOLS + SIMILAR_STOCK_INFO_TOOLS

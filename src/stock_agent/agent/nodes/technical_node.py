@@ -1,15 +1,12 @@
-import datetime
-from typing import Any, Dict, Literal
-from zoneinfo import ZoneInfo
+from typing import Any, Dict
 
 import pandas as pd
-from pydantic import BaseModel, Field
 from event.decorator import node
 from shared.agents.agent_state import AgentState
-from shared.code_rule import  remove_prefix
+from shared.code_rule import remove_prefix
 from shared.db.mysql import engine
 
-TECHNICAL_EXPLAIN = f"""
+TECHNICAL_EXPLAIN = """
     数学公式总结
     基础定义
     close = 每日收盘价序列

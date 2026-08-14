@@ -64,7 +64,7 @@ services:
   stock_etl:
     build:
       context: .
-      dockerfile: ./src/stock_etl/Dockerfile.stock_etl
+      dockerfile: ./Dockerfile.stock_etl
     image: stock-etl:0.1.3
     ports:
       - "8011:8011"

@@ -1,14 +1,15 @@
 """storage/qdrant_writer.py — DataFrame -> Qdrant 向量写入（dense / dense+sparse hybrid）"""
-from functools import lru_cache
+
+import time
 
 import pandas as pd
-from fastembed import SparseTextEmbedding
 from loguru import logger
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct, SparseVector
+
 from shared.db.qdrant import ensure_dense_collection, ensure_hybrid_collection, get_qdrant_client
-from shared.models.ollama_models import get_ollama_embedding, get_embedding_dim, get_sparse_model
-import time
+from shared.models.ollama_models import get_embedding_dim, get_ollama_embedding
+from shared.models.sparse import get_sparse_model
 
 
 def upsert_dense(df: pd.DataFrame, collection: str, build_text, get_payload, batch_size: int = 256, client: QdrantClient | None = None) -> None:

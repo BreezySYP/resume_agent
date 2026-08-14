@@ -1,13 +1,15 @@
 
 from typing import Any, Dict
-from pydantic import BaseModel, Field
-from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_core.output_parsers import JsonOutputParser
+
 from agent.tools import time_tool
 from event.decorator import node
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.output_parsers import JsonOutputParser
+from pydantic import BaseModel, Field
 from shared.agents.agent_state import CLEAR_MARK, AgentState
-from shared.models.deepseek import get_deepseek
 from shared.metrics.prome import invoke_with_metrics
+from shared.models.deepseek import get_deepseek
+
 
 class AnalysisPlan(BaseModel):
     current_time: str = Field(...)
@@ -52,7 +54,7 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
             "supervisor",
             model_name=model_name)
         plan['current_time'] = currtime
-    except Exception as e:
+    except Exception:
         plan = {"current_time": currtime, "plan_summary": "解析失败", "focus_areas": ["fundamental", "news"]}
 
     return {

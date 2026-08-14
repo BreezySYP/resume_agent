@@ -1,38 +1,136 @@
-"""shared/configs/settings.py — 全局配置，所有服务共用"""
-import os
-from dotenv import load_dotenv
+"""shared/configs/settings.py — 全局配置（pydantic-settings，所有服务共用）"""
 
-load_dotenv(override=True)
+from functools import lru_cache
 
-OLLAMA_URL   = os.getenv("OLLAMA_URL",   "http://localhost:11434")
-LLM_MODEL    = os.getenv("LLM_MODEL",    "qwen2.5:14b")
-LLM_SQL      = os.getenv("LLM_SQL",      "qwen2.5-coder:14b")
-EMBED_MODEL  = os.getenv("EMBED_MODEL",  "nomic-embed-text")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-REDIS_URL     = os.getenv("REDIS_URL",     "redis://localhost:6379")
-VS_INDEX_NAME = os.getenv("VS_INDEX_NAME", "multi_agent_rag")
 
-MYSQL_ROOT_USER     = os.getenv("MYSQL_ROOT_USER",         "root")
-MYSQL_PASSWORD = os.getenv("MYSQL_ROOT_PASSWORD", "changeit")
-MYSQL_HOST     = os.getenv("MYSQL_URL",           "host.docker.internal")
-MYSQL_PORT     = int(os.getenv("MYSQL_PORT",      "3306"))
-MYSQL_DB       = os.getenv("MYSQL_DATABASE",      "mydb")
+class Settings(BaseSettings):
+    """集中管理所有服务的环境变量配置。
 
-MINIO_URL      = os.getenv("MINIO_URL",           "http://localhost:9000")
-MINIO_USER     = os.getenv("MINIO_ROOT_USER",     "admin")
-MINIO_PASSWORD = os.getenv("MINIO_ROOT_PASSWORD", "changeit")
-MINIO_BUCKET   = os.getenv("MINIO_BUCKET",        "skills")
+    真实环境变量的优先级高于 `.env` 文件；`.env` 不存在时静默忽略。
+    """
 
-QDRANT_URL  = os.getenv("QDRANT_URL", "http://host.docker.internal:6333")
-CUDA_RERANK_URL = os.getenv("CUDA_RERANK_URL", "http://host.docker.internal:8000/api/v1/rerank")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
-TEMPO_URL = os.getenv("TEMPO_URL", "")
-LOKI_PUSH_URL = os.getenv("LOKI_PUSH_URL")
-ENV = os.getenv("ENV")
-APP_NAME = os.getenv("NAME")
+    # ── LLM ────────────────────────────────────────────────────────────
+    ollama_url: str = "http://localhost:11434"
+    deep_seek_key: str = ""
+    llm_model: str = "qwen2.5:14b"
+    llm_sql: str = "qwen2.5-coder:14b"
+    embed_model: str = "nomic-embed-text"
+    groq_api_key: str = ""
 
-THREAD_ID    = os.getenv("THREAD_ID", "agent_001")
-GRAPH_CONFIG = {"configurable": {"thread_id": THREAD_ID}}
+    # ── 存储 ───────────────────────────────────────────────────────────
+    redis_url: str = "redis://localhost:6379"
+    vs_index_name: str = "multi_agent_rag"
 
-LANGSMITH_PROJECT = os.getenv("LANGCHAIN_PROJECT", "monorepo_agent")
+    mysql_root_user: str = "root"
+    mysql_password: str = Field(default="changeit", validation_alias="MYSQL_ROOT_PASSWORD")
+    mysql_host: str = Field(default="host.docker.internal", validation_alias="MYSQL_URL")
+    mysql_port: int = 3306
+    mysql_db: str = Field(default="mydb", validation_alias="MYSQL_DATABASE")
+
+    minio_url: str = "http://localhost:9000"
+    minio_user: str = Field(default="admin", validation_alias="MINIO_ROOT_USER")
+    minio_password: str = Field(default="changeit", validation_alias="MINIO_ROOT_PASSWORD")
+    minio_bucket: str = "skills"
+
+    qdrant_url: str = "http://host.docker.internal:6333"
+    cuda_rerank_url: str = "http://host.docker.internal:8000/api/v1/rerank"
+
+    # ── 可观测性 ───────────────────────────────────────────────────────
+    tempo_url: str = ""
+    loki_push_url: str = ""
+    env: str = ""
+    app_name: str = Field(default="", validation_alias="NAME")
+
+    # ── 应用 ───────────────────────────────────────────────────────────
+    thread_id: str = "agent_001"
+    langsmith_project: str = Field(default="monorepo_agent", validation_alias="LANGCHAIN_PROJECT")
+
+    # ── Web ────────────────────────────────────────────────────────────
+    cors_origins: list[str] = ["*"]
+
+    @property
+    def graph_config(self) -> dict:
+        return {"configurable": {"thread_id": self.thread_id}}
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+_settings = get_settings()
+
+# 兼容旧的模块级常量引用（所有服务都直接 import 这些名字）
+OLLAMA_URL = _settings.ollama_url
+DEEP_SEEK_KEY = _settings.deep_seek_key
+LLM_MODEL = _settings.llm_model
+LLM_SQL = _settings.llm_sql
+EMBED_MODEL = _settings.embed_model
+GROQ_API_KEY = _settings.groq_api_key
+
+REDIS_URL = _settings.redis_url
+VS_INDEX_NAME = _settings.vs_index_name
+
+MYSQL_ROOT_USER = _settings.mysql_root_user
+MYSQL_PASSWORD = _settings.mysql_password
+MYSQL_HOST = _settings.mysql_host
+MYSQL_PORT = _settings.mysql_port
+MYSQL_DB = _settings.mysql_db
+
+MINIO_URL = _settings.minio_url
+MINIO_USER = _settings.minio_user
+MINIO_PASSWORD = _settings.minio_password
+MINIO_BUCKET = _settings.minio_bucket
+
+QDRANT_URL = _settings.qdrant_url
+CUDA_RERANK_URL = _settings.cuda_rerank_url
+
+TEMPO_URL = _settings.tempo_url
+LOKI_PUSH_URL = _settings.loki_push_url
+ENV = _settings.env
+APP_NAME = _settings.app_name
+
+THREAD_ID = _settings.thread_id
+GRAPH_CONFIG = _settings.graph_config
+LANGSMITH_PROJECT = _settings.langsmith_project
+
+CORS_ORIGINS = _settings.cors_origins
+
+__all__ = [
+    "OLLAMA_URL",
+    "DEEP_SEEK_KEY",
+    "LLM_MODEL",
+    "LLM_SQL",
+    "EMBED_MODEL",
+    "GROQ_API_KEY",
+    "REDIS_URL",
+    "VS_INDEX_NAME",
+    "MYSQL_ROOT_USER",
+    "MYSQL_PASSWORD",
+    "MYSQL_HOST",
+    "MYSQL_PORT",
+    "MYSQL_DB",
+    "MINIO_URL",
+    "MINIO_USER",
+    "MINIO_PASSWORD",
+    "MINIO_BUCKET",
+    "QDRANT_URL",
+    "CUDA_RERANK_URL",
+    "TEMPO_URL",
+    "LOKI_PUSH_URL",
+    "ENV",
+    "APP_NAME",
+    "THREAD_ID",
+    "GRAPH_CONFIG",
+    "LANGSMITH_PROJECT",
+    "CORS_ORIGINS",
+]

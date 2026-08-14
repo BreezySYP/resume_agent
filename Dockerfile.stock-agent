@@ -5,12 +5,13 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-COPY pyproject.toml .
-COPY src/shared ./src/shared
-COPY src/services/stock-agent ./src/services/stock-agent
+# 复制整个 workspace（uv 需要解析所有成员包）
+COPY pyproject.toml uv.lock ./
+COPY packages/shared ./packages/shared
+COPY src ./src
 
-RUN uv sync --package stock-agent --no-dev
+RUN uv sync --package stock_agent --no-dev
 
-WORKDIR /app/src/services/stock-agent
+WORKDIR /app/src/stock_agent
 EXPOSE 8004
-CMD ["uv", "run", "--package", "stock-agent", "langgraph", "dev", "--port", "8004"]
+CMD ["uv", "run", "langgraph", "dev", "--port", "8004", "--host", "0.0.0.0"]

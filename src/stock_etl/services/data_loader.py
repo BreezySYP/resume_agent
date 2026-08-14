@@ -1,10 +1,10 @@
 """data_loader.py — 带本地 CSV 缓存的数据加载器（避免重复查询 MySQL）"""
-import os
 
 import pandas as pd
-from sqlalchemy import text
 from shared.code_rule import add_prefix
 from shared.db.mysql import engine
+from sqlalchemy import text
+
 # from storage.mysql_writer import DATA_CSV_MAP
 
 

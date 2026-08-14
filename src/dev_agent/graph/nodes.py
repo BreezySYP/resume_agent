@@ -1,26 +1,23 @@
 """graph/nodes.py — 所有 LangGraph 节点"""
 from __future__ import annotations
-from functools import lru_cache
+
 import os
+from functools import lru_cache
 from typing import Any
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+
+from agents.base import build_generalist
+from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.pregel.remote import RemoteGraph
 from loguru import logger
+from shared.agents.agent_state import AgentState
 from shared.configs.settings import GRAPH_CONFIG
 from shared.configs.tracing import tracer
 from shared.models.ollama_models import get_llm
-from agents.base import build_generalist
-from shared.agents.agent_state import AgentState
 
 MAX_HISTORY = 10
 
 # @lru_cache(maxsize=1)
 # def _researcher(): return build_researcher()
-
-# @lru_cache(maxsize=1)
-# def _coder(): return build_coder()
-
-# @lru_cache(maxsize=1)
-# def _reviewer(): return build_reviewer()
 
 @lru_cache(maxsize=1)
 def _generalist(): return build_generalist()
@@ -73,29 +70,6 @@ def supervisor_node(state: AgentState) -> dict:
         return {"next": next_node}
 
 
-# def researcher_node(state: AgentState) -> dict:
-#     with tracer.start_as_current_span("researcher_node"):
-#         result        = _researcher().invoke(state)
-#         tool_contents = [m.content for m in result["messages"] if getattr(m, "type", "") == "tool"]
-#         update: dict[str, Any] = {"messages": result["messages"]}
-#         if tool_contents:
-#             update["rag_contexts"] = (state.get("rag_contexts") or []) + tool_contents
-#         return update
-
-
-# def coder_node(state: AgentState) -> dict:
-#     with tracer.start_as_current_span("coder_node"):
-#         result = _coder().invoke(state)
-#         return {"messages": result["messages"]}
-
-
-# def reviewer_node(state: AgentState) -> dict:
-#     with tracer.start_as_current_span("reviewer_node"):
-#         result = _reviewer().invoke(state)
-#         return {"messages": result["messages"]}
-
-
-from langgraph.pregel.remote import RemoteGraph
 _stock_remote = RemoteGraph(
     "stock_agent",
     url=os.getenv("STOCK_AGENT_URL", "http://localhost:8002"),
@@ -192,5 +166,6 @@ def _run_ragas_async(state: AgentState, answer: str) -> dict | None:
             logger.info(f"⚠️  RAGAS 线程异常: {e}")
 
     t = threading.Thread(target=_eval, daemon=True)
-    t.start(); t.join(timeout=120)
+    t.start()
+    t.join(timeout=120)
     return result_holder or None
