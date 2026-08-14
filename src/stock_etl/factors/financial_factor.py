@@ -7,7 +7,7 @@ OUTPUT_COLS = ["code", "name", "report_date", "profitability_score", "growth_sco
 def build_financial_factor(df: pd.DataFrame) -> pd.DataFrame:
     """输入: financial_feature 特征表，输出: 截面排名后的财务因子"""
     df = df.copy()
-    groups = df.groupby("date")
+    groups = df.groupby("report_date")
 
     profitability = groups["roe"].rank(pct=True) * 0.5 + groups["roa"].rank(pct=True) * 0.2 + groups["net_margin"].rank(pct=True) * 0.3
     df["profitability_score"] = profitability

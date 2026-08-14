@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+
 def rsi(close: pd.Series, window: int = 14) -> pd.Series:
     delta = close.diff()
     gain = delta.clip(lower=0)
@@ -64,9 +65,12 @@ def build_technical_factor(df: pd.DataFrame) -> pd.DataFrame:
     """
     # ✅ 2. 整体先按 code 和 date 排序，提高效率
     df = df.sort_values(["code", "date"]).reset_index(drop=True)
-    
-    # ✅ 3. 使用 groupby.apply 替代循环，更高效
-    df = df.groupby("code", group_keys=False).apply(_build_indicators)
+
+    # ✅ 3. 按股票分组计算指标（pandas 3.x 的 groupby.apply 不再保留分组列，改用显式循环）
+    parts = []
+    for _, grp in df.groupby("code", sort=False):
+        parts.append(_build_indicators(grp))
+    df = pd.concat(parts, ignore_index=True)
     
     # ✅ 4. 处理 NaN：用前向填充或中位数填充
     for col in RANK_COLS:

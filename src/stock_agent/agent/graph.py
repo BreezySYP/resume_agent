@@ -1,24 +1,24 @@
 """src/stock_agent/agent/graph.py"""
 
-from uuid import uuid4
 
-from langgraph.graph import END, START, StateGraph
-from langgraph.types import RetryPolicy
+from agent.nodes.eval_node import eval_node
+from agent.nodes.fundamental_node import fundamental_node
+from agent.nodes.memory_recall_node import memory_recall_node
+from agent.nodes.memory_write_node import memory_write_node
+from agent.nodes.news_node import news_node
+from agent.nodes.profile_node import profile_node
+from agent.nodes.reflection_node import reflection_node
+
 # 导入所有 node 函数
 from agent.nodes.supervisor_node import supervisor_node
-from agent.nodes.profile_node import profile_node
-from agent.nodes.fundamental_node import fundamental_node
-from agent.nodes.technical_node import technical_node
-from agent.nodes.news_node import news_node
 from agent.nodes.synthesizer_node import synthesizer_node
-from agent.nodes.reflection_node import reflection_node
-from agent.nodes.memory_write_node import memory_write_node
-from agent.nodes.memory_recall_node import memory_recall_node
-from agent.nodes.eval_node import eval_node
+from agent.nodes.technical_node import technical_node
+from agent.routing import should_continue
+from event.event_manager import event
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import RetryPolicy
 from shared.agents.agent_state import AgentState
 from shared.agents.checkpoint import get_aredis_checkpointer
-
-from event.event_manager import event
 
 
 def build_investment_agent(checkpointer):
@@ -57,16 +57,6 @@ def build_investment_agent(checkpointer):
     workflow.add_edge("memory_write", "eval")
     workflow.add_edge("eval", END)
 
-    def should_continue(state: AgentState) -> str:
-
-        """Reflection 后的决策逻辑"""
-        last_reflection = state.get("reflections", [""])[-1].upper()
-        retry_count = state.get("retry_count", 0)
-        
-        if retry_count >= 3 or "PASS" in last_reflection:
-            return "memory_write"  
-        return "synthesizer"
-
     workflow.add_conditional_edges(
         "reflection",
         should_continue,
@@ -97,24 +87,5 @@ async def ask_investment(question: str, job_id: str, thread_id: str = "default")
     event.graph_finish(job_id, "END", result.get("final_answer", "获取最终答案失败，请查询日志"))
     
     return result
-
-
-if __name__ == "__main__":
-    from uuid import UUID
-    import asyncio
-    job_id = uuid4()
-    result = asyncio.run(ask_investment("下半年AI应用领域值得投资的股票有哪些？", job_id, "debug"))
-    
-    print(result.get("final_answer"))
-    print(result["messages"][-1].content)
-
-    from shared.db.redis import pop_queue
-    while True:
-        event = pop_queue("debug")
-        if not event:
-            break
-        print(event)
-
-
 
 

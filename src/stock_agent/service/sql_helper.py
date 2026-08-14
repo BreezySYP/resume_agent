@@ -6,6 +6,11 @@ import pandas as pd
 from shared.db.mysql import engine
 
 
+def clean_sql(raw: str) -> str:
+    """去掉 LLM 输出中常见的 markdown 代码块标记。"""
+    return raw.strip().strip("```sql").strip("```").strip()
+
+
 def fetch_by_ids(table: str, ids: Sequence, id_col: str = "id") -> pd.DataFrame:
     ids = [str(i) for i in ids if i is not None]
     if not ids:

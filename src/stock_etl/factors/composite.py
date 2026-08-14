@@ -12,7 +12,8 @@ HORIZON_WEIGHTS = {
 def calculate_valuation_score(pe, pb, peg) -> float:
     if pd.isna(pe) or pe <= 0:
         return 0.5
-    score = 1.0 / (1 + np.log1p(pe)) + 1.0 / (1 + np.log1p(pb or 2))
+    safe_pb = pb if (not pd.isna(pb) and pb > 0) else 2
+    score = 1.0 / (1 + np.log1p(pe)) + 1.0 / (1 + np.log1p(safe_pb))
     return float(np.clip(score / 2, 0, 1))
 
 
@@ -30,8 +31,9 @@ def calculate_composite_score(df: pd.DataFrame, horizon: str = "medium") -> pd.D
 
 def build_composite_factor(technical_df: pd.DataFrame, financial_df: pd.DataFrame, horizon: str = "medium") -> pd.DataFrame:
     """合并技术因子（日频）与财务因子（季频），用 merge_asof 将每个交易日对齐到最近一期已公布财报"""
-    technical_df = technical_df.copy().sort_values(["code", "date"])
-    financial_df = financial_df.copy().sort_values(["code", "report_date"])
+    # merge_asof 要求 on 键全局有序，因此按日期排序（by=code 分组内部自然有序）
+    technical_df = technical_df.copy().sort_values(["date", "code"])
+    financial_df = financial_df.copy().sort_values(["report_date", "code"])
 
     # merge_asof 按 code 分组，对每个交易日找最近一期 report_date <= date 的财务数据
     merged = pd.merge_asof(

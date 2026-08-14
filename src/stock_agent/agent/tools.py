@@ -12,13 +12,10 @@ from langchain_core.tools import tool
 from langchain_tavily import TavilySearch
 from loguru import logger
 from service import search_similar
+from service.sql_helper import clean_sql
 from shared.db.mysql import engine, execute_query, get_schema, get_tables
 from shared.models.deepseek import get_deepseek
 from shared.text.stock_text import build_stock_news_text, build_stock_profile_text
-
-
-def _clean_sql(raw: str) -> str:
-    return raw.strip().strip("```sql").strip("```").strip()
 
 
 @tool
@@ -67,7 +64,7 @@ def query_database(question: str) -> str:
 
     sql_agent = get_deepseek()
     resp = sql_agent.invoke([SystemMessage(content=sql_agent_prompt), HumanMessage(content=question)])
-    sql = _clean_sql(resp.content)
+    sql = clean_sql(resp.content)
     logger.debug("Generated SQL: {}", sql)
 
     for attempt in range(3):
@@ -83,7 +80,7 @@ def query_database(question: str) -> str:
             logger.warning("Attempt {} failed: {}", attempt + 1, e)
             if attempt < 2:
                 fix_resp = sql_agent.invoke([SystemMessage(content=fix_prompt_tpl.format(sql=sql, error=e))])
-                sql = _clean_sql(fix_resp.content)
+                sql = clean_sql(fix_resp.content)
                 logger.debug("Fixed SQL: {}", sql)
 
     return f"查询失败，最终 SQL：{sql}"

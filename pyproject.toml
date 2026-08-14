@@ -7,13 +7,18 @@ members = [
     "src/stock_dashboard"
 ]
 [tool.uv]
-dev-dependencies = ["pytest>=8.0", "ruff>=0.4"]
+dev-dependencies = [
+    "pytest>=8.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.4",
+]
 
 [tool.uv.sources]
 shared = { workspace = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--cov=packages/shared/src/shared --cov=src/stock_agent --cov=src/stock_etl --cov-report=term-missing"
 pythonpath = [
     "packages/shared/src",
     "src/stock_agent",
