@@ -8,6 +8,7 @@ A 股投研多 Agent 系统 monorepo：数据 ETL → 因子计算 → 向量检
 | 项目 | 路径 | 说明 | 默认端口 |
 | --- | --- | --- | --- |
 | shared | `packages/shared` | 跨服务共用库（配置 / DB / 模型 / 检索 / 安全 / Web 工厂） | - |
+| rag_memory | `packages/rag_memory` | 分层记忆通用引擎（短/中/长记忆：写入判断、融合打分、整合） | - |
 | dev_agent | `src/dev_agent` | 多 Agent 编码助手（RAG 知识库 + RAGAS 评估） | 8003 API / 8501 UI |
 | stock_agent | `src/stock_agent` | A 股智能投研 Agent（LangGraph 多节点分析 + SSE 推送） | 8004 |
 | stock_etl | `src/stock_etl` | A 股数据 ETL：抓取 → 因子计算 → 写入 MySQL / Qdrant | 8011 |

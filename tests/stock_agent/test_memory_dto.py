@@ -124,5 +124,5 @@ def test_records_to_prompt_text():
         MemoryRecord(user_id="u", namespace="n", memory_type=MemoryType.EPISODE, content="结论：看好新能源"),
     ]
     text = records_to_prompt_text(records)
-    assert "1. [profile|0.877] 偏好低估值" in text
-    assert "2. [episode|-] 结论：看好新能源" in text
+    assert "1. [semantic|0.877] 偏好低估值" in text
+    assert "2. [episodic|-] 结论：看好新能源" in text

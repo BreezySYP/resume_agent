@@ -7,6 +7,7 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
+from rag_memory.schemas import MemoryTier
 
 COLLECTION_NAME = "agent_memories"
 
@@ -15,6 +16,35 @@ class MemoryType(str, Enum):
     EPISODE = "episode"          # 中期会话/任务摘要
     PROCEDURAL = "procedural"    # 可复用分析规则/行为
     LESSON = "lesson"            # 教训（可并入 procedural）
+    SUMMARY = "summary"          # 多轮整合后的中期结论（consolidated）
+
+
+# MemoryType → rag_memory.MemoryTier（长短中分层）
+MEMORY_TIER_BY_TYPE: dict[MemoryType, MemoryTier] = {
+    MemoryType.PROFILE: MemoryTier.SEMANTIC,      # 长期：语义事实
+    MemoryType.EPISODE: MemoryTier.EPISODIC,      # 短期：情景记忆（默认 TTL）
+    MemoryType.PROCEDURAL: MemoryTier.PROCEDURAL, # 长期：程序性经验
+    MemoryType.LESSON: MemoryTier.PROCEDURAL,     # 长期：教训归入程序性
+    MemoryType.SUMMARY: MemoryTier.CONSOLIDATED,  # 中期：整合结论
+}
+
+TIER_TO_MEMORY_TYPE: dict[MemoryTier, MemoryType] = {
+    MemoryTier.SEMANTIC: MemoryType.PROFILE,
+    MemoryTier.EPISODIC: MemoryType.EPISODE,
+    MemoryTier.PROCEDURAL: MemoryType.PROCEDURAL,
+    MemoryTier.CONSOLIDATED: MemoryType.SUMMARY,
+    MemoryTier.WORKING: MemoryType.EPISODE,
+}
+
+
+def memory_tier(memory_type: MemoryType) -> MemoryTier:
+    """MemoryType → MemoryTier。"""
+    return MEMORY_TIER_BY_TYPE.get(memory_type, MemoryTier.EPISODIC)
+
+
+def memory_type_from_tier(tier: MemoryTier) -> MemoryType:
+    """MemoryTier → MemoryType。"""
+    return TIER_TO_MEMORY_TYPE.get(tier, MemoryType.EPISODE)
 
 
 class MemoryStatus(str, Enum):

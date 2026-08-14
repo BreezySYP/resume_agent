@@ -6,7 +6,6 @@ import json
 from typing import Any, Mapping, Optional, Union
 
 import pandas as pd
-
 from memory.models import (
     MemoryCreate,
     MemoryExtractItem,
@@ -14,7 +13,11 @@ from memory.models import (
     MemorySource,
     MemoryStatus,
     MemoryType,
+    memory_tier,
+    memory_type_from_tier,
 )
+from rag_memory.schemas import MemoryItem
+from rag_memory.schemas import MemoryStatus as RagMemoryStatus
 
 RowLike = Union[Mapping[str, Any], pd.Series, dict]
 
@@ -152,5 +155,113 @@ def records_to_prompt_text(records: list[MemoryRecord]) -> str:
     lines = []
     for i, m in enumerate(records, 1):
         score = f"{m.score:.3f}" if m.score is not None else "-"
-        lines.append(f"{i}. [{m.memory_type.value}|{score}] {m.content}")
+        tier = memory_tier(m.memory_type).value
+        lines.append(f"{i}. [{tier}|{score}] {m.content}")
     return "\n".join(lines)
+
+
+def memory_record_to_item(record: MemoryRecord) -> MemoryItem:
+    """MemoryRecord → rag_memory.MemoryItem。"""
+    status_map = {
+        MemoryStatus.ACTIVE: RagMemoryStatus.ACTIVE,
+        MemoryStatus.SUPERSEDED: RagMemoryStatus.SUPERSEDED,
+        MemoryStatus.CONFLICT: RagMemoryStatus.CONFLICT,
+        MemoryStatus.DELETED: RagMemoryStatus.DELETED,
+    }
+    return MemoryItem(
+        id=record.id,
+        user_id=record.user_id,
+        namespace=record.namespace,
+        tier=memory_tier(record.memory_type),
+        content=record.content,
+        content_hash=record.content_hash,
+        status=status_map.get(record.status, RagMemoryStatus.ACTIVE),
+        superseded_by=record.superseded_by,
+        importance=record.importance,
+        confidence=record.confidence,
+        source=record.source.value,
+        source_thread_id=record.source_thread_id,
+        source_job_id=record.source_job_id,
+        vector_point_id=record.qdrant_point_id,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+        expires_at=record.expires_at,
+        metadata=record.metadata,
+    )
+
+
+def memory_create_to_item(data: MemoryCreate) -> MemoryItem:
+    """MemoryCreate → rag_memory.MemoryItem。"""
+    return MemoryItem(
+        user_id=data.user_id,
+        namespace=data.namespace,
+        tier=memory_tier(data.memory_type),
+        content=data.content,
+        importance=data.importance,
+        confidence=data.confidence,
+        source=data.source.value,
+        source_thread_id=data.source_thread_id,
+        source_job_id=data.source_job_id,
+        expires_at=data.expires_at,
+        metadata=data.metadata,
+    )
+
+
+def memory_item_to_record(
+    item: MemoryItem,
+    *,
+    score: Optional[float] = None,
+) -> MemoryRecord:
+    """rag_memory.MemoryItem → MemoryRecord。"""
+    status_map = {
+        RagMemoryStatus.ACTIVE: MemoryStatus.ACTIVE,
+        RagMemoryStatus.SUPERSEDED: MemoryStatus.SUPERSEDED,
+        RagMemoryStatus.CONFLICT: MemoryStatus.CONFLICT,
+        RagMemoryStatus.DELETED: MemoryStatus.DELETED,
+    }
+    try:
+        source = MemorySource(item.source)
+    except ValueError:
+        source = MemorySource.AGENT_INFERRED
+    return MemoryRecord(
+        id=item.id,
+        user_id=item.user_id,
+        namespace=item.namespace,
+        memory_type=memory_type_from_tier(item.tier),
+        content=item.content,
+        content_hash=item.content_hash,
+        status=status_map.get(item.status, MemoryStatus.ACTIVE),
+        superseded_by=item.superseded_by,
+        confidence=item.confidence,
+        importance=item.importance,
+        source=source,
+        source_thread_id=item.source_thread_id,
+        source_job_id=item.source_job_id,
+        qdrant_point_id=item.vector_point_id,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+        expires_at=item.expires_at,
+        metadata=item.metadata,
+        score=score if score is not None else item.score,
+    )
+
+
+def memory_item_to_create(item: MemoryItem) -> MemoryCreate:
+    """rag_memory.MemoryItem → MemoryCreate（用于仓储写入）。"""
+    try:
+        source = MemorySource(item.source)
+    except ValueError:
+        source = MemorySource.AGENT_INFERRED
+    return MemoryCreate(
+        user_id=item.user_id,
+        namespace=item.namespace,
+        memory_type=memory_type_from_tier(item.tier),
+        content=item.content,
+        source=source,
+        source_thread_id=item.source_thread_id,
+        source_job_id=item.source_job_id,
+        confidence=item.confidence,
+        importance=item.importance,
+        expires_at=item.expires_at,
+        metadata=item.metadata,
+    )

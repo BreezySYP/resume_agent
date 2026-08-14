@@ -1,51 +1,57 @@
-# src/stock_agent/memory/mem_service.py
-"""记忆业务编排：检索、写入、冲突更新。"""
+"""记忆业务门面：领域类型 <-> rag_memory 通用引擎。
+
+职责边界：
+- 通用算法（分层、融合打分、去重/替换判断、整合）在 `packages/rag_memory`。
+- 本模块只做：MemoryType/MemoryRecord 等领域的双向往返、默认参数、便捷方法。
+"""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from typing import Optional
-from uuid import uuid4
-
-from loguru import logger
-
-from memory.mem_qdrant_repo import (
-    build_memory_payload,
-    search_memories,
-    update_point_status,
-    upsert_memory_point,
-)
+from typing import Callable, Optional
 
 from memory.dto import (
     build_namespace,
     extract_item_to_create,
+    memory_create_to_item,
+    memory_item_to_record,
     records_to_prompt_text,
-    row_to_memory_record,
 )
-
 from memory.models import (
     MemoryCreate,
     MemoryExtractItem,
     MemoryRecord,
     MemorySource,
-    MemoryStatus,
     MemoryType,
+    memory_tier,
 )
 from memory.mysql_repo import MemoryRepository
+from memory.store import StockMemoryStore
+from rag_memory.engine import MemoryEngine
+from rag_memory.schemas import MemoryQuery, MemoryTier
+from rag_memory.store import MemoryStore
+
+Consolidator = Callable[[list[MemoryRecord]], list[str]]
 
 
 class MemoryService:
+    """领域门面：保持旧的公共 API，内部委托 rag_memory.MemoryEngine。"""
+
     def __init__(
         self,
         repo: Optional[MemoryRepository] = None,
         *,
+        store: Optional[MemoryStore] = None,
         similar_threshold: float = 0.88,
         use_hybrid: bool = True,
         default_episode_days: int = 30,
-    ):
-        self.repo = repo or MemoryRepository()
-        self.similar_threshold = similar_threshold
-        self.use_hybrid = use_hybrid
-        self.default_episode_days = default_episode_days
+        recall_important_top_k: int = 1,
+    ) -> None:
+        self.store = store or StockMemoryStore(repo, use_hybrid=use_hybrid)
+        self.engine = MemoryEngine(
+            self.store,
+            similar_threshold=similar_threshold,
+            default_episodic_ttl_days=default_episode_days,
+        )
+        self.recall_important_top_k = recall_important_top_k
 
     # ------------------------------------------------------------------
     # 检索
@@ -61,28 +67,18 @@ class MemoryService:
     ) -> list[MemoryRecord]:
         if not (query or "").strip():
             return []
-
-        types = [t.value for t in memory_types] if memory_types else None
-        df = search_memories(
-            user_id=user_id,
-            query=query,
-            top_k=limit,
-            namespace=namespace,
-            memory_types=types,
-            use_hybrid=self.use_hybrid,
+        tiers = [memory_tier(t) for t in memory_types] if memory_types else None
+        items = self.engine.search(
+            MemoryQuery(
+                user_id=user_id,
+                query=query,
+                namespaces=[namespace] if namespace else None,
+                tiers=tiers,
+                limit=limit,
+            ),
+            recall_important_top_k=0,
         )
-        if df is None or df.empty:
-            return []
-
-        records: list[MemoryRecord] = []
-        for _, row in df.iterrows():
-            score = row.get("original_score") if hasattr(row, "get") else row["original_score"]
-            try:
-                score = float(score) if score is not None and score == score else None
-            except Exception:
-                score = None
-            records.append(row_to_memory_record(row, score=score))
-        return records
+        return [memory_item_to_record(i) for i in items]
 
     def search_for_prompt(
         self,
@@ -91,31 +87,32 @@ class MemoryService:
         *,
         limit: int = 5,
     ) -> str:
-        items = self.search(
-            user_id=user_id,
-            query=query,
-            memory_types=[
-                MemoryType.PROFILE,
-                MemoryType.EPISODE,
-                MemoryType.PROCEDURAL,
-            ],
-            limit=limit,
+        """supervisor 注入用：语义相关 + 高重要性记忆兜底。"""
+        items = self.engine.search(
+            MemoryQuery(
+                user_id=user_id,
+                query=query or "",
+                tiers=[
+                    MemoryTier.SEMANTIC,
+                    MemoryTier.EPISODIC,
+                    MemoryTier.PROCEDURAL,
+                    MemoryTier.CONSOLIDATED,
+                ],
+                limit=limit,
+            ),
+            recall_important_top_k=self.recall_important_top_k,
         )
-        if not items:
-            return "（暂无相关长期记忆）"
+        return records_to_prompt_text([memory_item_to_record(i) for i in items])
 
-        return records_to_prompt_text(items)
-
-        
     # ------------------------------------------------------------------
-    # 写入：统一走 MemoryExtractItem（LLM 结构化结果）
+    # 写入
     # ------------------------------------------------------------------
     def add_from_extract(
         self,
         user_id: str,
         item: MemoryExtractItem,
     ) -> MemoryRecord:
-        """LLM 提取单条记忆后的标准写入入口。"""
+        """LLM 结构化单条记忆的标准写入入口。"""
         data = extract_item_to_create(user_id, item)
         return self.add_memory(data)
 
@@ -124,7 +121,6 @@ class MemoryService:
         user_id: str,
         items: list[MemoryExtractItem],
     ) -> list[MemoryRecord]:
-        """一次提取多条时批量写入。"""
         results: list[MemoryRecord] = []
         for item in items:
             content = (item.content or "").strip()
@@ -137,39 +133,13 @@ class MemoryService:
         content = (data.content or "").strip()
         if not content:
             raise ValueError("memory content is empty")
-
         if not data.namespace:
             data.namespace = build_namespace(data.user_id, data.memory_type)
 
-        if data.memory_type == MemoryType.EPISODE and data.expires_at is None:
-            data.expires_at = datetime.utcnow() + timedelta(
-                days=self.default_episode_days
-            )
+        item = memory_create_to_item(data)
+        result = self.engine.add(item)
+        return memory_item_to_record(result.item)
 
-        similar = self.search(
-            user_id=data.user_id,
-            query=content,
-            namespace=data.namespace,
-            memory_types=[data.memory_type],
-            limit=3,
-        )
-        top = similar[0] if similar else None
-        if (
-            top is not None
-            and top.score is not None
-            and top.score >= self.similar_threshold
-        ):
-            logger.info(
-                "memory supersede old={} score={:.3f} user={}",
-                top.id,
-                top.score,
-                data.user_id,
-            )
-            return self._write_and_supersede(data, top)
-
-        return self._write_new(data)
-
-    # 便捷方法：内部仍构造 MemoryExtractItem，避免 **kw
     def add_profile(
         self,
         user_id: str,
@@ -240,78 +210,23 @@ class MemoryService:
         return self.add_from_extract(user_id, item)
 
     # ------------------------------------------------------------------
-    # 内部写入
+    # 整合：episode → summary（中期记忆）
     # ------------------------------------------------------------------
-    def _write_new(self, data: MemoryCreate) -> MemoryRecord:
-        memory_id = str(uuid4())
-        record = self.repo.insert(
-            data, memory_id=memory_id, qdrant_point_id=memory_id
+    def consolidate(
+        self,
+        user_id: str,
+        *,
+        summarizer: Optional[Consolidator] = None,
+        min_items: int = 3,
+    ) -> list[MemoryRecord]:
+        """把近期 EPISODE 交给 summarizer(records) -> [摘要文本]，产出 SUMMARY 记忆。"""
+
+        def _adapter(episodes):
+            return summarizer([memory_item_to_record(e) for e in episodes])
+
+        items = self.engine.consolidate(
+            user_id,
+            summarizer=_adapter if summarizer is not None else None,
+            min_items=min_items,
         )
-
-        payload = build_memory_payload(
-            memory_id=memory_id,
-            user_id=data.user_id,
-            namespace=data.namespace,
-            memory_type=data.memory_type.value,
-            status=MemoryStatus.ACTIVE.value,
-            source=data.source.value,
-            importance=data.importance,
-            confidence=data.confidence,
-            content_preview=data.content,
-            created_at=(record.created_at or datetime.utcnow()).isoformat(),
-            expires_at=record.expires_at.isoformat() if record.expires_at else None,
-        )
-        try:
-            upsert_memory_point(
-                point_id=memory_id,
-                content=data.content,
-                payload=payload,
-            )
-        except Exception as e:
-            logger.error("qdrant upsert failed memory_id={}: {}", memory_id, e)
-            raise
-
-        return record
-
-    def _write_and_supersede(
-        self, data: MemoryCreate, old: MemoryRecord
-    ) -> MemoryRecord:
-        new_record = self._write_new(data)
-        self.repo.mark_superseded(
-            old_id=old.id, new_id=new_record.id, user_id=data.user_id
-        )
-        try:
-            update_point_status(
-                point_id=old.qdrant_point_id or old.id,
-                status=MemoryStatus.SUPERSEDED.value,
-                superseded_by=new_record.id,
-            )
-        except Exception as e:
-            logger.warning("update qdrant status failed old={}: {}", old.id, e)
-        return new_record
-
-
-if __name__ == "__main__":
-    svc = MemoryService(use_hybrid=True)
-
-    from shared.db.qdrant import ensure_hybrid_collection, get_qdrant_client
-    from shared.models.ollama_models import get_embedding_dim
-    from memory.models import COLLECTION_NAME
-    dim = get_embedding_dim()
-    ensure_hybrid_collection(get_qdrant_client(), collection=COLLECTION_NAME, dim=dim)
-    # 模拟 LLM 结构化输出
-    extracted = MemoryExtractItem(
-        content="用户风险偏好较低，偏好稳健成长。",
-        memory_type=MemoryType.PROFILE,
-        source=MemorySource.AGENT_INFERRED,
-        importance=4,
-        confidence=0.9,
-        source_thread_id="thread_001",
-    )
-    svc.add_from_extract("u_10086", extracted)
-
-    ctx = svc.search_for_prompt(
-        "u_10086", "下半年AI应用有哪些适合稳健投资者的标的？"
-    )
-    
-    print(ctx)
+        return [memory_item_to_record(i) for i in items]

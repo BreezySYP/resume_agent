@@ -4,6 +4,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from loguru import logger
 from memory.mem_service import MemoryService
 from memory.models import MemoryExtractResult
+from rag_memory.extract import build_extract_prompt
 from shared.agents.agent_state import AgentState
 from shared.metrics.prome import invoke_with_metrics
 from shared.models.deepseek import get_deepseek
@@ -22,26 +23,21 @@ def memory_write_node(state: AgentState) -> dict:
     thread_id = state.get("thread_id")
     job_id = str(state.get("job_id") or "")
 
-    payload = f"""## 用户问题
-        {question}
-        """
-
-    EXTRACT_PROMPT = f"""你是记忆提取器。根据本轮投资分析交互，提取值得跨会话保存的记忆。
-        只输出真正对未来有用的内容；没有则 items 为空列表。
-
-        类别说明：
-        - profile: 用户投资偏好、风险承受、约束（如“只看成长股”）
-        - episode: 本轮问题与核心结论的高密度摘要（一两句）
-        - procedural: 可复用分析教训（如“新闻强但技术超买需强调回撤”）
-
-        不要保存：原始行情、完整长报告、一次性中间推理。
-
-        ## 最终结论（可截断）
+    EXTRACT_PROMPT = build_extract_prompt(
+        user_question=question,
+        conversation_summary=f"""## 最终结论（可截断）
         {final_answer[:3000]}
 
         ## Reflection
         {reflection_text[:1500]}
-        """
+        """,
+        extra_guidance="""
+        领域说明：
+        - profile: 用户投资偏好、风险承受、约束（如“只看成长股”）
+        - episode: 本轮问题与核心结论的高密度摘要（一两句）
+        - procedural: 可复用分析教训（如“新闻强但技术超买需强调回撤”）
+        """,
+    )
 
     try:
         llm_name = "deepseek-chat"
@@ -52,7 +48,7 @@ def memory_write_node(state: AgentState) -> dict:
             extractor,
             [
                 SystemMessage(content=EXTRACT_PROMPT),
-                HumanMessage(content=payload),
+                HumanMessage(content=question),
             ],
             "memory_write",
             llm_name,

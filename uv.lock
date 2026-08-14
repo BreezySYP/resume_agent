@@ -19,6 +19,7 @@ resolution-markers = [
 [manifest]
 members = [
     "dev-agent",
+    "rag-memory",
     "shared",
     "stock-agent",
     "stock-dashboard",
@@ -4826,6 +4827,17 @@ wheels = [
 ]
 
 [[package]]
+name = "rag-memory"
+version = "0.1.0"
+source = { editable = "packages/rag_memory" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.0" }]
+
+[[package]]
 name = "ragas"
 version = "0.4.3"
 source = { registry = "https://pypi.org/simple" }
@@ -5785,6 +5797,7 @@ dependencies = [
     { name = "pandas" },
     { name = "prometheus-client" },
     { name = "qdrant-client" },
+    { name = "rag-memory" },
     { name = "requests" },
     { name = "shared" },
     { name = "sqlalchemy" },
@@ -5806,6 +5819,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.0" },
     { name = "prometheus-client", specifier = ">=0.26.0" },
     { name = "qdrant-client", specifier = ">=1.18.0" },
+    { name = "rag-memory", editable = "packages/rag_memory" },
     { name = "requests", specifier = ">=2.31" },
     { name = "shared", editable = "packages/shared" },
     { name = "sqlalchemy", specifier = ">=2.0" },

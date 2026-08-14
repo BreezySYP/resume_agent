@@ -3,34 +3,33 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
 from typing import Any, Optional
 from uuid import uuid4
 
-from sqlalchemy import text
-from sqlalchemy.engine import Engine
-
-# 复用你项目已有的 engine
-from shared.db.mysql import engine as default_engine
-
+from memory.dto import row_to_memory_record
 from memory.models import (
     MemoryCreate,
     MemoryRecord,
-    MemoryStatus,
     MemoryType,
-    MemorySource,
 )
-
-from memory.dto import row_to_memory_record
+from sqlalchemy import text
+from sqlalchemy.engine import Engine
 
 
 def _content_hash(content: str) -> str:
     return hashlib.sha256(content.strip().encode("utf-8")).hexdigest()
 
 
+def _default_engine() -> Engine:
+    """惰性加载默认 engine：避免 import 时连接 MySQL（可测性/启动速度）。"""
+    from shared.db.mysql import engine
+
+    return engine
+
+
 class MemoryRepository:
     def __init__(self, eng: Engine | None = None):
-        self.engine = eng or default_engine
+        self.engine = eng or _default_engine()
 
     def create_tables(self) -> None:
         """幂等建表"""
