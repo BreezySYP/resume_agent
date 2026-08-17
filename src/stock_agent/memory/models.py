@@ -15,7 +15,6 @@ class MemoryType(str, Enum):
     PROFILE = "profile"          # 用户长期画像
     EPISODE = "episode"          # 中期会话/任务摘要
     PROCEDURAL = "procedural"    # 可复用分析规则/行为
-    LESSON = "lesson"            # 教训（可并入 procedural）
     SUMMARY = "summary"          # 多轮整合后的中期结论（consolidated）
 
 
@@ -24,7 +23,6 @@ MEMORY_TIER_BY_TYPE: dict[MemoryType, MemoryTier] = {
     MemoryType.PROFILE: MemoryTier.SEMANTIC,      # 长期：语义事实
     MemoryType.EPISODE: MemoryTier.EPISODIC,      # 短期：情景记忆（默认 TTL）
     MemoryType.PROCEDURAL: MemoryTier.PROCEDURAL, # 长期：程序性经验
-    MemoryType.LESSON: MemoryTier.PROCEDURAL,     # 长期：教训归入程序性
     MemoryType.SUMMARY: MemoryTier.CONSOLIDATED,  # 中期：整合结论
 }
 
@@ -58,7 +56,6 @@ class MemorySource(str, Enum):
     USER_EXPLICIT = "user_explicit"      # 用户明确说“记住”
     USER_FEEDBACK = "user_feedback"      # 用户纠错/反馈
     AGENT_INFERRED = "agent_inferred"    # Agent 自动提取
-    SYSTEM = "system"
 
 
 class MemoryCreate(BaseModel):

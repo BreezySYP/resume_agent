@@ -27,18 +27,18 @@ def build_extract_prompt(
         f"- {TIER_GUIDANCE[t]}" for t in tiers if t in TIER_GUIDANCE
     )
     return f"""你是记忆提取器。根据本轮交互，提取值得跨会话保存的记忆。
-只输出真正对未来有用的内容；没有则 items 为空列表。
+        只输出真正对未来有用的内容；没有则 items 为空列表。
 
-类别说明：
-{tier_lines}
+        类别说明：
+        {tier_lines}
 
-{extra_guidance}
+        {extra_guidance}
 
-不要保存：原始行情、完整长报告、一次性中间推理。
+        不要保存：原始行情、完整长报告、一次性中间推理。
 
-## 用户问题
-{user_question or "（无）"}
+        ## 用户问题
+        {user_question or "（无）"}
 
-## 本轮内容（可截断）
-{conversation_summary or "（无）"}
-"""
+        ## 本轮内容（可截断）
+        {conversation_summary or "（无）"}
+        """

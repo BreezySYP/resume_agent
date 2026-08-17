@@ -31,41 +31,6 @@ class MemoryRepository:
     def __init__(self, eng: Engine | None = None):
         self.engine = eng or _default_engine()
 
-    def create_tables(self) -> None:
-        """幂等建表"""
-        ddl_main = """
-            CREATE TABLE IF NOT EXISTS agent_memories (
-                id              VARCHAR(36)  NOT NULL PRIMARY KEY,
-                user_id         VARCHAR(64)  NOT NULL,
-                namespace        VARCHAR(128) NOT NULL,
-                memory_type     VARCHAR(32)  NOT NULL,
-                content         TEXT         NOT NULL,
-                content_hash    CHAR(64)     DEFAULT NULL,
-                status          VARCHAR(20)  NOT NULL DEFAULT 'active',
-                superseded_by   VARCHAR(36)  DEFAULT NULL,
-                confidence      DECIMAL(3,2) DEFAULT 1.00,
-                importance      TINYINT      DEFAULT 3,
-                source          VARCHAR(32)  NOT NULL DEFAULT 'agent_inferred',
-                source_thread_id VARCHAR(64) DEFAULT NULL,
-                source_job_id   VARCHAR(64)  DEFAULT NULL,
-                qdrant_point_id VARCHAR(36)  DEFAULT NULL,
-                object_key      VARCHAR(512) DEFAULT NULL,
-                created_at      DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-                updated_at      DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
-                                ON UPDATE CURRENT_TIMESTAMP(3),
-                expires_at      DATETIME(3)  DEFAULT NULL,
-                metadata        JSON         DEFAULT NULL,
-                INDEX idx_user_ns_status (user_id, namespace, status),
-                INDEX idx_user_type_status (user_id, memory_type, status),
-                INDEX idx_status_expires (status, expires_at),
-                INDEX idx_content_hash (content_hash),
-                INDEX idx_superseded_by (superseded_by)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-            """
-
-        with self.engine.begin() as conn:
-            conn.execute(text(ddl_main))
-
     def insert(self, data: MemoryCreate, memory_id: Optional[str] = None,
                qdrant_point_id: Optional[str] = None) -> MemoryRecord:
         mid = memory_id or str(uuid4())
@@ -113,20 +78,6 @@ class MemoryRepository:
             row = conn.execute(sql, {"id": memory_id}).mappings().first()
         return row_to_memory_record(row) if row else None
 
-    def get_active_by_ids(self, ids: list[str]) -> list[MemoryRecord]:
-        if not ids:
-            return []
-        # 简单实现：逐个或 IN 查询
-        placeholders = ", ".join([f":id{i}" for i in range(len(ids))])
-        params = {f"id{i}": vid for i, vid in enumerate(ids)}
-        sql = text(f"""
-            SELECT * FROM agent_memories
-            WHERE id IN ({placeholders}) AND status = 'active'
-        """)
-        with self.engine.connect() as conn:
-            rows = conn.execute(sql, params).mappings().all()
-        return [row_to_memory_record(r) for r in rows]
-
     def list_active(
         self,
         user_id: str,
@@ -172,15 +123,6 @@ class MemoryRepository:
         with self.engine.begin() as conn:
             conn.execute(sql, {"id": memory_id})
 
-    def update_qdrant_point_id(self, memory_id: str, point_id: str) -> None:
-        sql = text("""
-            UPDATE agent_memories
-            SET qdrant_point_id = :point_id
-            WHERE id = :id
-        """)
-        with self.engine.begin() as conn:
-            conn.execute(sql, {"id": memory_id, "point_id": point_id})
-
     def find_by_content_hash(self, user_id: str, content_hash: str) -> Optional[MemoryRecord]:
         sql = text("""
             SELECT * FROM agent_memories
@@ -190,8 +132,3 @@ class MemoryRepository:
         with self.engine.connect() as conn:
             row = conn.execute(sql, {"user_id": user_id, "h": content_hash}).mappings().first()
         return row_to_memory_record(row) if row else None
-
-
-if __name__ == "__main__":
-    repo = MemoryRepository()
-    repo.create_tables()

@@ -28,7 +28,7 @@ memory_write_node  ──add_from_extract──▶      │                    �
 | `profile` | `semantic`（长） | 用户画像、偏好、约束 |
 | `episode` | `episodic`（短，默认 30 天 TTL） | 单轮会话/任务摘要 |
 | `summary` | `consolidated`（中） | 多轮整合后的结论 |
-| `procedural` / `lesson` | `procedural`（长） | 可复用分析方法、教训 |
+| `procedural` | `procedural`（长） | 可复用分析方法、教训 |
 
 ## 关键流程
 

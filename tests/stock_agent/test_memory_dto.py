@@ -68,7 +68,6 @@ def test_parse_metadata():
 def test_build_namespace():
     assert build_namespace("u1", MemoryType.PROFILE) == "user:u1:profile"
     assert build_namespace("u1", MemoryType.EPISODE) == "user:u1:episode"
-    assert build_namespace("u1", MemoryType.LESSON) == "user:u1:procedural"
 
 
 def test_extract_item_to_create():

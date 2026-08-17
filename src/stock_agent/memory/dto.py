@@ -120,7 +120,6 @@ def build_namespace(user_id: str, memory_type: MemoryType) -> str:
         MemoryType.PROFILE: "profile",
         MemoryType.EPISODE: "episode",
         MemoryType.PROCEDURAL: "procedural",
-        MemoryType.LESSON: "procedural",
     }
     suffix = mapping.get(memory_type, memory_type.value)
     return f"user:{user_id}:{suffix}"
