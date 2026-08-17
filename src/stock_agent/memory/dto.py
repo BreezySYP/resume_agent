@@ -90,19 +90,28 @@ def row_to_memory_record(row: RowLike, *, score: Optional[float] = None) -> Memo
     status_raw = _safe_str(_get(row, "status"), "active")
     source_raw = _safe_str(_get(row, "source"), MemorySource.AGENT_INFERRED.value)
     type_raw = _safe_str(_get(row, "memory_type"), MemoryType.EPISODE.value)
+    try:
+        memory_type = MemoryType(type_raw)
+    except ValueError:
+        # 存量/脏数据可能含枚举之外的取值（如历史遗留），兜底为 episode，避免整列接口 500
+        memory_type = MemoryType.EPISODE
+    try:
+        source = MemorySource(source_raw)
+    except ValueError:
+        source = MemorySource.AGENT_INFERRED
 
     return MemoryRecord(
         id=_safe_str(_get(row, "id")),
         user_id=_safe_str(_get(row, "user_id")),
         namespace=_safe_str(_get(row, "namespace")),
-        memory_type=MemoryType(type_raw),
+        memory_type=memory_type,
         content=_safe_str(_get(row, "content")),
         content_hash=_get(row, "content_hash"),
         status=MemoryStatus(status_raw),
         superseded_by=_get(row, "superseded_by"),
         confidence=_safe_float(_get(row, "confidence"), 1.0),
         importance=_safe_int(_get(row, "importance"), 3),
-        source=MemorySource(source_raw),
+        source=source,
         source_thread_id=_get(row, "source_thread_id"),
         source_job_id=_get(row, "source_job_id"),
         qdrant_point_id=_get(row, "qdrant_point_id"),

@@ -28,6 +28,8 @@ def test_memory_type_values():
     assert MemoryType.PROFILE.value == "profile"
     assert MemoryType.EPISODE.value == "episode"
     assert MemoryType.PROCEDURAL.value == "procedural"
+    assert MemoryType.LESSON.value == "lesson"
+    assert MemorySource.SYSTEM.value == "system"
 
 
 def test_memory_create_validation_bounds():
@@ -111,6 +113,34 @@ def test_row_to_memory_record_from_series_and_nan_score():
     record = row_to_memory_record(row)
     assert record.score is None
     assert record.memory_type == MemoryType.EPISODE  # 默认值
+
+
+def test_row_to_memory_record_accepts_legacy_lesson_and_system():
+    row = {
+        "id": "3",
+        "user_id": "u1",
+        "namespace": "user:u1:procedural",
+        "memory_type": "lesson",
+        "content": "强消息面叠加超买时强调回撤",
+        "source": "system",
+    }
+    record = row_to_memory_record(row)
+    assert record.memory_type == MemoryType.LESSON
+    assert record.source == MemorySource.SYSTEM
+
+
+def test_row_to_memory_record_falls_back_on_unknown_values():
+    row = {
+        "id": "4",
+        "user_id": "u1",
+        "namespace": "user:u1:whatever",
+        "memory_type": "unknown_type",
+        "content": "c",
+        "source": "unknown_source",
+    }
+    record = row_to_memory_record(row)
+    assert record.memory_type == MemoryType.EPISODE
+    assert record.source == MemorySource.AGENT_INFERRED
 
 
 def test_records_to_prompt_text():

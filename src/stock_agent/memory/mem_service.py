@@ -104,6 +104,25 @@ class MemoryService:
         )
         return records_to_prompt_text([memory_item_to_record(i) for i in items])
 
+    def list_memories(
+        self,
+        user_id: str,
+        *,
+        memory_type: Optional[MemoryType] = None,
+        namespace: Optional[str] = None,
+        limit: int = 50,
+    ) -> list[MemoryRecord]:
+        """列出用户全部有效记忆（active），可选按类型/命名空间过滤。"""
+        tiers = [memory_tier(memory_type)] if memory_type else None
+        namespaces = [namespace] if namespace else None
+        items = self.store.list_active(
+            user_id,
+            namespaces=namespaces,
+            tiers=tiers,
+            limit=limit,
+        )
+        return [memory_item_to_record(i) for i in items]
+
     # ------------------------------------------------------------------
     # 写入
     # ------------------------------------------------------------------

@@ -50,6 +50,39 @@ def test_add_memory_empty_raises():
     raise AssertionError("空内容应抛出 ValueError")
 
 
+def test_list_memories_returns_only_that_users_active_memories():
+    svc = _svc()
+    svc.add_profile("u1", "用户偏好稳健成长")
+    svc.add_episode("u1", "第一轮结论")
+    svc.add_profile("u2", "另一个用户")
+
+    records = svc.list_memories("u1")
+    assert len(records) == 2
+    assert all(r.user_id == "u1" for r in records)
+    assert {r.memory_type for r in records} == {MemoryType.PROFILE, MemoryType.EPISODE}
+
+
+def test_list_memories_filters_by_type_namespace_and_limit():
+    svc = _svc()
+    svc.add_profile("u1", "画像")
+    svc.add_episode("u1", "事件1")
+    svc.add_episode("u1", "事件2")
+
+    episodes = svc.list_memories("u1", memory_type=MemoryType.EPISODE)
+    assert len(episodes) == 2
+    assert all(r.memory_type == MemoryType.EPISODE for r in episodes)
+
+    limited = svc.list_memories("u1", limit=1)
+    assert len(limited) == 1
+
+    from memory.dto import build_namespace
+
+    ns = build_namespace("u1", MemoryType.PROFILE)
+    profiles = svc.list_memories("u1", namespace=ns)
+    assert len(profiles) == 1
+    assert profiles[0].memory_type == MemoryType.PROFILE
+
+
 def test_consolidate_via_service_produces_summary():
     svc = _svc()
     for i in range(3):
