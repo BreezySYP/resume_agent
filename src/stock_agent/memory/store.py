@@ -1,7 +1,7 @@
 """记忆存储适配层：Qdrant（混合向量）+ MySQL（元数据），实现 rag_memory.MemoryStore。"""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import pandas as pd
@@ -20,6 +20,65 @@ from service.sql_helper import attach_scores, fetch_by_ids
 from shared.db.qdrant import get_qdrant_client
 
 MEMORY_TABLE = "agent_memories"
+
+SORTABLE_FIELDS = {
+    "created_at",
+    "updated_at",
+    "memory_type",
+    "namespace",
+    "importance",
+    "confidence",
+    "status",
+}
+
+
+def _sort_key(sort_by: str):
+    """MemoryRecord/MemoryItem → 排序值（memory_type 用领域类型值排序）。"""
+    if sort_by not in SORTABLE_FIELDS:
+        raise ValueError(f"unsupported sort_by: {sort_by!r}")
+
+    def _key(item: MemoryItem):
+        if sort_by == "created_at":
+            return item.created_at
+        if sort_by == "updated_at":
+            return item.updated_at
+        if sort_by == "memory_type":
+            return memory_type_from_tier(item.tier).value
+        if sort_by == "namespace":
+            return item.namespace
+        if sort_by == "importance":
+            return item.importance
+        if sort_by == "confidence":
+            return item.confidence
+        return item.status.value
+
+    return _key
+
+
+def _sort_items(
+    items: list[MemoryItem],
+    sort_by: str,
+    sort_order: str,
+) -> list[MemoryItem]:
+    """稳定排序：NULL 统一排最后。"""
+    key = _sort_key(sort_by)
+    non_null = [item for item in items if key(item) is not None]
+    nulls = [item for item in items if key(item) is None]
+    non_null.sort(key=key, reverse=(sort_order == "desc"))
+    return non_null + nulls
+
+
+def _not_expired(expires_at) -> bool:
+    """过期时间是否还没到；无法解析 / 为空视为未过期，避免误过滤。"""
+    if pd.isna(expires_at):
+        return True
+    try:
+        ts = pd.Timestamp(expires_at).to_pydatetime()
+    except Exception:
+        return True
+    if ts.tzinfo is not None:
+        ts = ts.astimezone(timezone.utc).replace(tzinfo=None)
+    return ts > datetime.utcnow()
 
 
 def _build_filter(
@@ -100,6 +159,8 @@ class StockMemoryStore:
             return pd.DataFrame()
         if "status" in df.columns:
             df = df[df["status"] == "active"]
+        if "expires_at" in df.columns:
+            df = df[df["expires_at"].map(_not_expired)]
         return attach_scores(df, hits)
 
     def search(
@@ -168,6 +229,9 @@ class StockMemoryStore:
         namespaces: Optional[list[str]] = None,
         tiers: Optional[list[MemoryTier]] = None,
         limit: int = 50,
+        offset: int = 0,
+        sort_by: str = "updated_at",
+        sort_order: str = "desc",
     ) -> list[MemoryItem]:
         namespace = namespaces[0] if namespaces and len(namespaces) == 1 else None
         types = [memory_type_from_tier(t) for t in tiers] if tiers else None
@@ -177,16 +241,25 @@ class StockMemoryStore:
                 merged.extend(
                     memory_record_to_item(r)
                     for r in self.repo.list_active(
-                        user_id, namespace=namespace, memory_type=t, limit=limit
+                        user_id,
+                        namespace=namespace,
+                        memory_type=t,
+                        limit=limit + offset,
+                        offset=0,
+                        sort_by=sort_by,
+                        sort_order=sort_order,
                     )
                 )
-            merged.sort(key=lambda i: (i.importance, i.updated_at or datetime.min), reverse=True)
-            return merged[:limit]
+            merged = _sort_items(merged, sort_by, sort_order)
+            return merged[offset : offset + limit]
         records = self.repo.list_active(
             user_id,
             namespace=namespace,
             memory_type=types[0] if types else None,
             limit=limit,
+            offset=offset,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
         return [memory_record_to_item(r) for r in records]
 
@@ -197,7 +270,18 @@ class StockMemoryStore:
         namespaces: Optional[list[str]] = None,
         tiers: Optional[list[MemoryTier]] = None,
     ) -> int:
-        return len(self.list_active(user_id, namespaces=namespaces, tiers=tiers, limit=1000))
+        namespace = namespaces[0] if namespaces and len(namespaces) == 1 else None
+        types = [memory_type_from_tier(t) for t in tiers] if tiers else None
+        if types and len(types) > 1:
+            return sum(
+                self.repo.count_active(user_id, namespace=namespace, memory_type=t)
+                for t in types
+            )
+        return self.repo.count_active(
+            user_id,
+            namespace=namespace,
+            memory_type=types[0] if types else None,
+        )
 
     def mark_superseded(self, old_id: str, new_id: str) -> None:
         old = self.get(old_id)

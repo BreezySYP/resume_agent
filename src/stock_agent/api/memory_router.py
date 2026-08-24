@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Query
 from memory.mem_service import MemoryService
@@ -13,6 +13,17 @@ router = APIRouter(prefix="/api/ai", tags=["Memory"])
 
 # 列表接口返回的记忆正文最大长度，超出部分截断并置 content_truncated=True
 MAX_MEMORY_CONTENT_CHARS = 200
+
+MemorySortBy = Literal[
+    "created_at",
+    "updated_at",
+    "memory_type",
+    "namespace",
+    "importance",
+    "confidence",
+    "status",
+]
+MemorySortOrder = Literal["asc", "desc"]
 
 
 class MemoryListItem(BaseModel):
@@ -33,6 +44,8 @@ class MemoryListItem(BaseModel):
 
 class MemoryListResponse(BaseModel):
     total: int
+    page: int = 1
+    page_size: int = 50
     items: list[MemoryListItem]
 
 
@@ -73,16 +86,32 @@ def _to_memory_list_item(record: MemoryRecord) -> MemoryListItem:
 )
 async def list_user_memories(
     user_id: str,
-    limit: int = Query(50, ge=1, le=500, description="最多返回条数"),
+    limit: int = Query(50, ge=1, le=500, description="每页条数（旧参数，page_size 优先）"),
+    page: int = Query(1, ge=1, description="页码，从 1 开始"),
+    page_size: Optional[int] = Query(None, ge=1, le=500, description="每页条数"),
+    sort_by: MemorySortBy = Query(
+        "created_at", description="排序字段：created_at/updated_at/memory_type/namespace/importance/confidence/status"
+    ),
+    sort_order: MemorySortOrder = Query("desc", description="排序方向：asc/desc"),
     memory_type: Optional[MemoryType] = Query(None, description="按记忆类型过滤"),
     namespace: Optional[str] = Query(None, description="按命名空间过滤"),
     service: MemoryService = Depends(_memory_service),
 ) -> MemoryListResponse:
+    size = page_size if page_size is not None else limit
+    offset = (page - 1) * size
+    total = service.count_memories(
+        user_id,
+        memory_type=memory_type,
+        namespace=namespace,
+    )
     records = service.list_memories(
         user_id,
         memory_type=memory_type,
         namespace=namespace,
-        limit=limit,
+        limit=size,
+        offset=offset,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
     items = [_to_memory_list_item(r) for r in records]
-    return MemoryListResponse(total=len(items), items=items)
+    return MemoryListResponse(total=total, page=page, page_size=size, items=items)

@@ -21,7 +21,7 @@
 		}
 	},
 	// 容器创建后自动执行的命令（非常重要）
-	"postCreateCommand": "uv sync --dev && uv --version",
+	"postCreateCommand": "uv sync --dev",
 
 	// 可选：让 VS Code 默认使用 uv 创建的虚拟环境
   	"postStartCommand": "bash .devcontainer/postStart.sh",

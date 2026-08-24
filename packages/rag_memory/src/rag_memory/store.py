@@ -6,6 +6,52 @@ from typing import Optional, Protocol
 
 from rag_memory.schemas import MemoryCandidate, MemoryItem, MemoryStatus, MemoryTier
 
+SORTABLE_FIELDS = {
+    "created_at",
+    "updated_at",
+    "memory_type",
+    "namespace",
+    "importance",
+    "confidence",
+    "status",
+}
+
+
+def _sort_key(sort_by: str):
+    """返回 MemoryItem → 排序值 的取数函数（memory_type 用 tier 值排序）。"""
+    if sort_by not in SORTABLE_FIELDS:
+        raise ValueError(f"unsupported sort_by: {sort_by!r}")
+
+    def _key(item: MemoryItem):
+        if sort_by == "created_at":
+            return item.created_at
+        if sort_by == "updated_at":
+            return item.updated_at
+        if sort_by == "memory_type":
+            return item.tier.value
+        if sort_by == "namespace":
+            return item.namespace
+        if sort_by == "importance":
+            return item.importance
+        if sort_by == "confidence":
+            return item.confidence
+        return item.status.value
+
+    return _key
+
+
+def sort_items(
+    items: list[MemoryItem],
+    sort_by: str = "updated_at",
+    sort_order: str = "desc",
+) -> list[MemoryItem]:
+    """稳定排序：NULL 统一排最后（先排非空组，再排空值组）。"""
+    key = _sort_key(sort_by)
+    non_null = [item for item in items if key(item) is not None]
+    nulls = [item for item in items if key(item) is None]
+    non_null.sort(key=key, reverse=(sort_order == "desc"))
+    return non_null + nulls
+
 
 class MemoryStore(Protocol):
     """记忆存储协议：由具体工程（Qdrant + MySQL 等）实现。"""
@@ -39,6 +85,9 @@ class MemoryStore(Protocol):
         namespaces: Optional[list[str]] = None,
         tiers: Optional[list[MemoryTier]] = None,
         limit: int = 50,
+        offset: int = 0,
+        sort_by: str = "updated_at",
+        sort_order: str = "desc",
     ) -> list[MemoryItem]:
         ...
 
@@ -126,14 +175,17 @@ class InMemoryMemoryStore(MemoryStore):
         namespaces: Optional[list[str]] = None,
         tiers: Optional[list[MemoryTier]] = None,
         limit: int = 50,
+        offset: int = 0,
+        sort_by: str = "updated_at",
+        sort_order: str = "desc",
     ) -> list[MemoryItem]:
         items = [
             item
             for item in self._items.values()
             if self._matches(item, user_id, namespaces, tiers)
         ]
-        items.sort(key=lambda i: (i.importance, i.updated_at or datetime.min), reverse=True)
-        return items[:limit]
+        items = sort_items(items, sort_by=sort_by, sort_order=sort_order)
+        return items[offset : offset + limit]
 
     def count_active(
         self,

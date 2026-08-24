@@ -111,8 +111,11 @@ class MemoryService:
         memory_type: Optional[MemoryType] = None,
         namespace: Optional[str] = None,
         limit: int = 50,
+        offset: int = 0,
+        sort_by: str = "updated_at",
+        sort_order: str = "desc",
     ) -> list[MemoryRecord]:
-        """列出用户全部有效记忆（active），可选按类型/命名空间过滤。"""
+        """列出用户有效记忆（active），支持过滤 + 排序 + 分页。"""
         tiers = [memory_tier(memory_type)] if memory_type else None
         namespaces = [namespace] if namespace else None
         items = self.store.list_active(
@@ -120,8 +123,23 @@ class MemoryService:
             namespaces=namespaces,
             tiers=tiers,
             limit=limit,
+            offset=offset,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
         return [memory_item_to_record(i) for i in items]
+
+    def count_memories(
+        self,
+        user_id: str,
+        *,
+        memory_type: Optional[MemoryType] = None,
+        namespace: Optional[str] = None,
+    ) -> int:
+        """统计用户有效记忆总数（与 list_memories 同一套过滤条件）。"""
+        tiers = [memory_tier(memory_type)] if memory_type else None
+        namespaces = [namespace] if namespace else None
+        return self.store.count_active(user_id, namespaces=namespaces, tiers=tiers)
 
     # ------------------------------------------------------------------
     # 写入

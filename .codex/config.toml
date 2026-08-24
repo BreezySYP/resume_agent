@@ -1,20 +1,16 @@
-
 model = "deepseek-v4-flash"
 model_provider = "deepseek"
 preferred_auth_method = "apikey"
 forced_login_method = "api"
 model_reasoning_effort = "high"
-model_catalog_json = "models.json"
+model_catalog_json = "/workspace/.codex/models.json"
 personality = "pragmatic"
-# 此容器（Docker/WSL2）的 seccomp 策略拦截 unshare(CLONE_NEWUSER)，
-# bwrap 沙箱无法工作，因此默认沙箱只能使用 danger-full-access。
-# 权限控制由 approval_policy = "on-request" 承担。
+
 sandbox_mode = "danger-full-access"
 approval_policy = "on-request"
 
 [projects."/workspace"]
 trust_level = "trusted"
-
 
 [model_providers.deepseek]
 name = "deepseek"

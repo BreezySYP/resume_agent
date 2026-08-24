@@ -1,4 +1,6 @@
 """stock_agent memory 领域门面测试（注入 InMemory 存储，不依赖 MySQL/Qdrant）。"""
+from datetime import datetime, timedelta
+
 from memory.mem_service import MemoryService
 from memory.models import MemoryExtractItem, MemoryType
 from rag_memory.store import InMemoryMemoryStore
@@ -81,6 +83,23 @@ def test_list_memories_filters_by_type_namespace_and_limit():
     profiles = svc.list_memories("u1", namespace=ns)
     assert len(profiles) == 1
     assert profiles[0].memory_type == MemoryType.PROFILE
+
+
+def test_list_memories_excludes_expired_episodes():
+    svc = _svc()
+    svc.add_from_extract(
+        "u1",
+        MemoryExtractItem(
+            content="过期结论",
+            memory_type=MemoryType.EPISODE,
+            expires_at=datetime.utcnow() - timedelta(days=1),
+        ),
+    )
+    svc.add_episode("u1", "有效结论")
+
+    records = svc.list_memories("u1", memory_type=MemoryType.EPISODE)
+    assert [r.content for r in records] == ["有效结论"]
+    assert svc.count_memories("u1", memory_type=MemoryType.EPISODE) == 1
 
 
 def test_consolidate_via_service_produces_summary():
