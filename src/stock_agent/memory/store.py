@@ -11,6 +11,7 @@ from memory.dto import (
     memory_record_to_item,
     row_to_memory_record,
 )
+from memory.metrics import track_vector_operation
 from memory.models import COLLECTION_NAME, MemoryStatus, memory_type_from_tier
 from memory.mysql_repo import MemoryRepository
 from qdrant_client import models
@@ -148,10 +149,11 @@ class StockMemoryStore:
         limit: int,
     ) -> pd.DataFrame:
         q_filter = _build_filter(user_id, namespaces, tiers)
-        if self.use_hybrid:
-            hits = search_hybrid(COLLECTION_NAME, query, top_k=limit, query_filter=q_filter)
-        else:
-            hits = search_dense(COLLECTION_NAME, query, top_k=limit, query_filter=q_filter)
+        with track_vector_operation("search"):
+            if self.use_hybrid:
+                hits = search_hybrid(COLLECTION_NAME, query, top_k=limit, query_filter=q_filter)
+            else:
+                hits = search_dense(COLLECTION_NAME, query, top_k=limit, query_filter=q_filter)
         if hits is None or hits.empty:
             return pd.DataFrame()
         df = fetch_by_ids(MEMORY_TABLE, list(hits["id"]))
@@ -201,12 +203,13 @@ class StockMemoryStore:
         )
         point_id = record.qdrant_point_id or item.id
         try:
-            upsert_hybrid_point(
-                collection=COLLECTION_NAME,
-                point_id=point_id,
-                text=item.content,
-                payload=_build_payload(item),
-            )
+            with track_vector_operation("upsert"):
+                upsert_hybrid_point(
+                    collection=COLLECTION_NAME,
+                    point_id=point_id,
+                    text=item.content,
+                    payload=_build_payload(item),
+                )
         except Exception as e:
             logger.error("memory qdrant upsert failed id={}: {}", item.id, e)
             raise

@@ -15,6 +15,15 @@ from memory.dto import (
     memory_item_to_record,
     records_to_prompt_text,
 )
+from memory.metrics import (
+    record_consolidation_output,
+    record_memory_write,
+    record_recall,
+    record_ttl,
+    set_active_count,
+    track_consolidation,
+    track_memory_operation,
+)
 from memory.models import (
     MemoryCreate,
     MemoryExtractItem,
@@ -65,20 +74,21 @@ class MemoryService:
         namespace: Optional[str] = None,
         limit: int = 5,
     ) -> list[MemoryRecord]:
-        if not (query or "").strip():
-            return []
-        tiers = [memory_tier(t) for t in memory_types] if memory_types else None
-        items = self.engine.search(
-            MemoryQuery(
-                user_id=user_id,
-                query=query,
-                namespaces=[namespace] if namespace else None,
-                tiers=tiers,
-                limit=limit,
-            ),
-            recall_important_top_k=0,
-        )
-        return [memory_item_to_record(i) for i in items]
+        with track_memory_operation("search"):
+            if not (query or "").strip():
+                return []
+            tiers = [memory_tier(t) for t in memory_types] if memory_types else None
+            items = self.engine.search(
+                MemoryQuery(
+                    user_id=user_id,
+                    query=query,
+                    namespaces=[namespace] if namespace else None,
+                    tiers=tiers,
+                    limit=limit,
+                ),
+                recall_important_top_k=0,
+            )
+            return [memory_item_to_record(i) for i in items]
 
     def search_for_prompt(
         self,
@@ -88,21 +98,24 @@ class MemoryService:
         limit: int = 5,
     ) -> str:
         """supervisor 注入用：语义相关 + 高重要性记忆兜底。"""
-        items = self.engine.search(
-            MemoryQuery(
-                user_id=user_id,
-                query=query or "",
-                tiers=[
-                    MemoryTier.SEMANTIC,
-                    MemoryTier.EPISODIC,
-                    MemoryTier.PROCEDURAL,
-                    MemoryTier.CONSOLIDATED,
-                ],
-                limit=limit,
-            ),
-            recall_important_top_k=self.recall_important_top_k,
-        )
-        return records_to_prompt_text([memory_item_to_record(i) for i in items])
+        with track_memory_operation("recall"):
+            items = self.engine.search(
+                MemoryQuery(
+                    user_id=user_id,
+                    query=query or "",
+                    tiers=[
+                        MemoryTier.SEMANTIC,
+                        MemoryTier.EPISODIC,
+                        MemoryTier.PROCEDURAL,
+                        MemoryTier.CONSOLIDATED,
+                    ],
+                    limit=limit,
+                ),
+                recall_important_top_k=self.recall_important_top_k,
+            )
+            text = records_to_prompt_text([memory_item_to_record(i) for i in items])
+            record_recall(len(items), text)
+            return text
 
     def list_memories(
         self,
@@ -116,18 +129,19 @@ class MemoryService:
         sort_order: str = "desc",
     ) -> list[MemoryRecord]:
         """列出用户有效记忆（active），支持过滤 + 排序 + 分页。"""
-        tiers = [memory_tier(memory_type)] if memory_type else None
-        namespaces = [namespace] if namespace else None
-        items = self.store.list_active(
-            user_id,
-            namespaces=namespaces,
-            tiers=tiers,
-            limit=limit,
-            offset=offset,
-            sort_by=sort_by,
-            sort_order=sort_order,
-        )
-        return [memory_item_to_record(i) for i in items]
+        with track_memory_operation("list"):
+            tiers = [memory_tier(memory_type)] if memory_type else None
+            namespaces = [namespace] if namespace else None
+            items = self.store.list_active(
+                user_id,
+                namespaces=namespaces,
+                tiers=tiers,
+                limit=limit,
+                offset=offset,
+                sort_by=sort_by,
+                sort_order=sort_order,
+            )
+            return [memory_item_to_record(i) for i in items]
 
     def count_memories(
         self,
@@ -137,9 +151,12 @@ class MemoryService:
         namespace: Optional[str] = None,
     ) -> int:
         """统计用户有效记忆总数（与 list_memories 同一套过滤条件）。"""
-        tiers = [memory_tier(memory_type)] if memory_type else None
-        namespaces = [namespace] if namespace else None
-        return self.store.count_active(user_id, namespaces=namespaces, tiers=tiers)
+        with track_memory_operation("count"):
+            tiers = [memory_tier(memory_type)] if memory_type else None
+            namespaces = [namespace] if namespace else None
+            total = self.store.count_active(user_id, namespaces=namespaces, tiers=tiers)
+            set_active_count(memory_type.value if memory_type else "all", total)
+            return total
 
     # ------------------------------------------------------------------
     # 写入
@@ -173,9 +190,14 @@ class MemoryService:
         if not data.namespace:
             data.namespace = build_namespace(data.user_id, data.memory_type)
 
-        item = memory_create_to_item(data)
-        result = self.engine.add(item)
-        return memory_item_to_record(result.item)
+        with track_memory_operation("add"):
+            item = memory_create_to_item(data)
+            result = self.engine.add(item)
+            record = memory_item_to_record(result.item)
+            record_memory_write(data.memory_type.value, result.action)
+            if result.action in ("created", "superseded"):
+                record_ttl(data.memory_type.value, record.created_at, record.expires_at)
+            return record
 
     def add_profile(
         self,
@@ -261,9 +283,11 @@ class MemoryService:
         def _adapter(episodes):
             return summarizer([memory_item_to_record(e) for e in episodes])
 
-        items = self.engine.consolidate(
-            user_id,
-            summarizer=_adapter if summarizer is not None else None,
-            min_items=min_items,
-        )
-        return [memory_item_to_record(i) for i in items]
+        with track_consolidation():
+            items = self.engine.consolidate(
+                user_id,
+                summarizer=_adapter if summarizer is not None else None,
+                min_items=min_items,
+            )
+            record_consolidation_output(len(items))
+            return [memory_item_to_record(i) for i in items]
