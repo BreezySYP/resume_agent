@@ -45,7 +45,7 @@ def profile_node(state: AgentState):
     model_name = "deepseek-chat"
     model = get_deepseek(model=model_name)
     parser = JsonOutputParser(pydantic_object=SearchPlan)
-    keywords = model.invoke([first_prompt]).content
+    keywords = invoke_with_metrics(model, [first_prompt], "stock_profile", model_name).content
     keywords = json.loads(keywords)["keywords"]
     searched_keywords = set()
     all_profiles = {}

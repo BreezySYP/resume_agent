@@ -1,14 +1,17 @@
 """ragas_eval/evaluator.py — RAGAS 自动评估"""
 from __future__ import annotations
+
 import datetime
+import uuid
 from typing import Any
+
 from datasets import Dataset
+from langsmith import Client as LangSmithClient
 from loguru import logger
 from ragas import evaluate
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.llms import LangchainLLMWrapper
-from ragas.metrics import faithfulness, answer_relevancy
-from langsmith import Client as LangSmithClient
+from ragas.metrics import answer_relevancy, faithfulness
 from shared.configs.settings import LANGSMITH_PROJECT
 from shared.configs.tracing import tracer
 from shared.models.ollama_models import get_embedding
@@ -46,16 +49,27 @@ def run_ragas(question: str, contexts: list[str], answer: str, llm, run_id: str 
 
 def _push_to_langsmith(scores: dict, question: str, answer: str, run_id: str | None) -> None:
     try:
-        if run_id is None:
-            run = _ls_client.create_run(
-                name="ragas_eval", run_type="chain", project_name=LANGSMITH_PROJECT,
-                inputs={"question": question}, outputs={"answer": answer},
-            )
-            run_id = str(run.id)
-            _ls_client.update_run(run_id, end_time=datetime.datetime.utcnow())
+        ls_run_id = str(uuid.uuid4())
+        _ls_client.create_run(
+            id=ls_run_id,
+            name="ragas_eval",
+            run_type="chain",
+            project_name=LANGSMITH_PROJECT,
+            inputs={"question": question},
+            outputs={"answer": answer},
+            metadata={"job_id": run_id} if run_id else None,
+        )
+        _ls_client.update_run(
+            ls_run_id,
+            end_time=datetime.datetime.utcnow(),
+            outputs={
+                "answer": answer,
+                **{k: v for k, v in scores.items() if isinstance(v, (int, float))},
+            },
+        )
         for key, value in scores.items():
             if isinstance(value, float):
-                _ls_client.create_feedback(run_id=run_id, key=f"ragas_{key}", score=value,
+                _ls_client.create_feedback(run_id=ls_run_id, key=f"ragas_{key}", score=value,
                                            comment=f"Auto RAGAS eval @ {scores['timestamp']}")
     except Exception as e:
         logger.info(f"⚠️  LangSmith 上报失败: {e}")

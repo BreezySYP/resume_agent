@@ -1,14 +1,14 @@
 """ragas_eval/evaluator.py — RAGAS 自动评估（新写法）"""
 from __future__ import annotations
+
 import datetime
-from typing import Any
 import uuid
-from datasets import Dataset
-from loguru import logger
+
 from langsmith import Client as LangSmithClient
+from loguru import logger
+
 from shared.configs.settings import LANGSMITH_PROJECT
 from shared.configs.tracing import get_tracer, span_error
-import numpy as np
 
 _ls_client = LangSmithClient()
 
@@ -58,24 +58,41 @@ def run_ragas(question: str, answer: str, run_id: uuid, scores: dict) -> dict:
 
 
 def push_to_langsmith(scores: dict, question: str, answer: str, run_id: str) -> None:
-    _ls_client.create_run(id=run_id,
-        name="ragas_eval", run_type="chain", project_name=LANGSMITH_PROJECT,
-        inputs={"question": question}, outputs={"answer": answer},
-    )
-    _ls_client.update_run(
-        run_id,
-        end_time=datetime.datetime.utcnow(),
-        outputs={
-            "answer": answer,
-            **{k: v for k, v in scores.items() if isinstance(v, (int, float))},
-        },
-        # 可选：明确标记成功
-        # error=None,
-    )
-    for key, value in scores.items():
-        if isinstance(value, float):
-            _ls_client.create_feedback(run_id=run_id, key=f"ragas_{key}", score=value,
-                                        comment=f"Auto RAGAS eval @ {scores['timestamp']}")
+    """把评估分数推送到 LangSmith。
+
+    run_id（job_id）只作为关联字段放进 metadata；每次调用使用独立的 LangSmith
+    run id，避免同一 job_id 被重复处理时触发服务端 409（Duplicate run update）。
+    推送失败只记 warning，不影响业务。
+    """
+    ls_run_id = str(uuid.uuid4())
+    try:
+        _ls_client.create_run(
+            id=ls_run_id,
+            name="ragas_eval",
+            run_type="chain",
+            project_name=LANGSMITH_PROJECT,
+            inputs={"question": question},
+            outputs={"answer": answer},
+            metadata={"job_id": run_id} if run_id else None,
+        )
+        _ls_client.update_run(
+            ls_run_id,
+            end_time=datetime.datetime.utcnow(),
+            outputs={
+                "answer": answer,
+                **{k: v for k, v in scores.items() if isinstance(v, (int, float))},
+            },
+        )
+        for key, value in scores.items():
+            if isinstance(value, float):
+                _ls_client.create_feedback(
+                    run_id=ls_run_id,
+                    key=f"ragas_{key}",
+                    score=value,
+                    comment=f"Auto RAGAS eval @ {scores.get('timestamp', '')}",
+                )
+    except Exception as e:
+        logger.warning("push_to_langsmith failed (job_id={}): {}", run_id, e)
 
 
 if __name__ == "__main__":
