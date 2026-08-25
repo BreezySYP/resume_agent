@@ -48,7 +48,7 @@
         "x": 0,
         "y": 0
       },
-      "description": "各 memory 操作（search/recall/add/list/count/consolidate）的成功请求速率，反映 memory 子系统整体负载。"
+      "description": "各 memory 操作（search/recall/add/list/count/consolidate）的成功请求速率，反映 memory 子系统整体负载。异常排查：\n1. 先确认是真实异常还是数据缺失：访问 Prometheus Targets（http://localhost:9090/targets）确认 stock-agent 抓取正常，curl http://localhost:8013/metrics 确认 memory_operations_total 存在。\n2. 若 QPS 归零：查看服务是否存活/重启过（docker compose ps stock-agent、docker compose logs stock-agent），服务重启会导致计数器清零。\n3. 若某个 operation 暴涨：add 暴涨查是否有重复触发记忆写入（看 memory_write 节点日志），search/recall 暴涨查前端或 Agent 是否高频调用。\n4. 修复后观察 1~2 个抓取周期（30s）内 QPS 是否恢复；若服务正常仍归零，检查 prometheus.yml 的 target 地址与端口映射。"
     },
     {
       "id": 2,
@@ -105,7 +105,7 @@
         "x": 8,
         "y": 0
       },
-      "description": "所有 memory 操作中失败请求的占比，正常应接近 0；持续大于 1% 说明有系统性问题（如 Qdrant 不可用、SQL 异常）。"
+      "description": "所有 memory 操作中失败请求的占比，正常应接近 0；持续大于 1% 说明有系统性问题。异常排查：\n1. 先看趋势排除瞬时抖动（单次 500 或超时不算异常），确认错误率是否持续 5 分钟以上。\n2. 查日志定位错误类型：docker compose logs stock-agent | grep -iE 'memory|error'，看是 MySQL/Qdrant 连接错误还是参数校验/代码异常。\n3. 按依赖逐个验证：MySQL（docker compose exec mysql mysqladmin ping）、Qdrant（curl localhost:6333/healthz）、Redis（记忆检索链路）。\n4. 修复依赖或代码后观察错误率回落；若仍高，用 operation 维度拆分定位是哪个操作在失败。"
     },
     {
       "id": 3,
@@ -148,7 +148,7 @@
         "x": 16,
         "y": 0
       },
-      "description": "各 memory 操作耗时 P95 分位，用来定位是写库、向量检索还是整合环节变慢。"
+      "description": "各 memory 操作耗时 P95 分位，用来定位是写库、向量检索还是整合环节变慢。异常排查：\n1. 确认是否伴随错误率上升（通常是依赖超时导致的假象）。\n2. 看是哪个操作慢：add 慢查 MySQL 写入和 Qdrant upsert；search/recall 慢查 Qdrant 查询与 embedding 计算；list/count 慢查 MySQL 索引（user_id+namespace+status 组合）是否命中。\n3. 对照 Qdrant 延迟面板和 MySQL 慢查询日志（docker compose exec mysql 查 slow log）。\n4. 针对性优化：加索引、调小 Qdrant top_k、扩大连接池；修复后观察 P95 回落。"
     },
     {
       "id": 4,
@@ -191,7 +191,7 @@
         "x": 0,
         "y": 8
       },
-      "description": "按动作统计写入速率：created 新写入、deduplicated 去重命中、superseded 被替换、skipped 跳过；观察去重/替换是否异常偏高。"
+      "description": "按动作统计写入速率：created 新写入、deduplicated 去重命中、superseded 被替换、skipped 跳过。异常排查：\n1. 确认写入来源：是 Agent 自动提取（memory_write 节点）还是 API 手动写入，看对应日志。\n2. deduplicated 占比极高：说明 LLM 每次提取出相同内容，检查提取提示词是否模板化、内容是否在重复保存。\n3. superseded 占比极高：说明相似阈值（similar_threshold=0.88）过松或同一结论被频繁更新，考虑调高阈值。\n4. created 归零且 skipped 高：说明 LLM 提取返回空 items，检查结构化输出（with_structured_output）和提示词类别说明是否失效。"
     },
     {
       "id": 5,
@@ -244,7 +244,7 @@
         "x": 8,
         "y": 8
       },
-      "description": "写入中命中内容去重的比例，反映 Agent 是否在反复产出相同结论。"
+      "description": "写入中命中内容去重的比例，反映 Agent 是否反复产出相同结论。异常排查：\n1. 确认是\"同一内容重复写\"还是\"不同内容被误判相似\"：按 content_hash 分组查 agent_memories，看重复的是否真的相同。\n2. 若内容确实相同：多半是 LLM 提取产出模板化结论，调整提取提示词或合并写入逻辑。\n3. 若内容不同却被去重：语义相似度误判，调高 similar_threshold（当前 0.88）。\n4. 调整后观察去重率变化，目标是重复内容能命中、不同内容不误伤。"
     },
     {
       "id": 6,
@@ -297,7 +297,7 @@
         "x": 16,
         "y": 8
       },
-      "description": "写入中因语义相似而被替换的比例，反映记忆更新频率。"
+      "description": "写入中因语义相似而被替换的比例，反映记忆更新频率。异常排查：\n1. 确认是否有高频更新场景（如每轮对话都在更新同一投资结论），看 superseded_by 链条判断替换是否合理。\n2. 若替换过于频繁：说明新旧记忆一直处于相似边缘，考虑调高 similar_threshold 减少误替换。\n3. 若替换过少：记忆长期不更新，检查写入路径是否真的在更新（add 是否走了 superseded 分支）。\n4. 观察被替换记忆（status=superseded）是否大量堆积，必要时定期清理，避免表膨胀。"
     },
     {
       "id": 7,
@@ -339,7 +339,7 @@
         "x": 0,
         "y": 16
       },
-      "description": "Agent 每次对话召回记忆却返回空结果的速率；突增说明历史记忆没被检索到，需排查向量检索或记忆覆盖不足。"
+      "description": "Agent 每次对话召回记忆却返回空结果的速率；突增说明历史记忆没被检索到。异常排查：\n1. 先确认\"应该有记忆却 miss\"：新用户/全新话题没有历史记忆时 miss 属正常，排除后再排查。\n2. 检查该用户 agent_memories 是否有 active 记录：可能记忆已过期（expires_at 过去）或状态非 active（被替换/删除）。\n3. 检查 Qdrant 检索链路：召回面板的 Qdrant 错误/延迟、embedding 是否生成成功（向量点是否真的写入）。\n4. 若 Qdrant 正常但搜不到：检查 namespace/tier 过滤是否与写入时一致，或相似度阈值是否过高。"
     },
     {
       "id": 8,
@@ -387,7 +387,7 @@
         "x": 8,
         "y": 16
       },
-      "description": "每次召回实际返回的记忆条数 P50/P95；长期顶满 limit 说明上下文可能冗余，长期偏少说明记忆不足。"
+      "description": "每次召回实际返回的记忆条数 P50/P95；长期顶满 limit 说明上下文冗余，长期偏少说明记忆不足。异常排查：\n1. 长期顶满 limit：相关记忆过多或阈值过松，考虑调低 search_for_prompt 的 limit 或提高相关性阈值。\n2. 长期为 0 且 miss 高：按\"召回 miss\"面板排查（Qdrant、TTL、namespace 过滤）。\n3. 为 0 但 miss 计数不高：说明命中了高重要性兜底记忆（recall_important_top_k），检查该参数是否生效、注入是否正常。\n4. 调整后观察分布变化，目标是与业务所需记忆量匹配而非顶满。"
     },
     {
       "id": 9,
@@ -429,7 +429,7 @@
         "x": 16,
         "y": 16
       },
-      "description": "注入到 prompt 的记忆文本长度 P95，直接关联 LLM token 成本；突变提示记忆内容在膨胀。"
+      "description": "注入到 prompt 的记忆文本长度 P95，直接关联 LLM token 成本；突变提示记忆内容在膨胀。异常排查：\n1. 拆解是条数变多还是单条变长：查 agent_memories 中 content 最长的记录（按 LENGTH(content) 排序）。\n2. 单条过长：说明 LLM 提取时没控制摘要长度，调整提取提示词要求精简。\n3. 条数变多：检查召回 limit 是否被调大、记忆是否大量堆积（对照有效记忆量面板）。\n4. 优化后观察字符数回落，并确认 LLM Token 消耗是否同步下降。"
     },
     {
       "id": 10,
@@ -472,7 +472,7 @@
         "x": 0,
         "y": 24
       },
-      "description": "episode→summary 整合任务执行次数（ok/error），error 增长说明 LLM 摘要或存储链路有问题。"
+      "description": "episode→summary 整合任务执行次数（ok/error），error 增长说明 LLM 摘要或存储链路有问题。异常排查：\n1. 看 error 时段的日志：docker compose logs stock-agent | grep -i consolidate，确认是 LLM 摘要调用失败还是写入失败。\n2. 对照 LLM 错误率/延迟面板：整合依赖 LLM 摘要，LLM 异常会直接导致整合 error。\n3. 若返回空属于 insufficient_items（episode 数 < min_items），属正常，确认 min_items 是否符合业务预期。\n4. 修复 LLM 链路或调整 min_items 后，观察 ok 计数恢复增长、error 停止增长。"
     },
     {
       "id": 11,
@@ -514,7 +514,7 @@
         "x": 8,
         "y": 24
       },
-      "description": "整合任务（含 LLM 摘要调用）耗时 P95，反映整合管线效率。"
+      "description": "整合任务（含 LLM 摘要调用）耗时 P95，反映整合管线效率。异常排查：\n1. 整合耗时主要由 LLM 摘要驱动，先对照 LLM 延迟面板确认是否 LLM 变慢。\n2. 检查单次整合处理的 episode 数量（max_items=20）是否过大，样本多了耗时自然上升。\n3. 优化方向：减少 max_items、拆分批次整合、换更快的摘要模型或加并发。\n4. 优化后观察 P95 回落；若仍高且 LLM 正常，检查是否有其他串行环节（写入 summary、向量 upsert）。"
     },
     {
       "id": 12,
@@ -556,7 +556,7 @@
         "x": 16,
         "y": 24
       },
-      "description": "整合产出的 summary 记忆速率；长期为 0 说明 episode 没有沉淀为中期记忆。"
+      "description": "整合产出的 summary 记忆速率；长期为 0 说明 episode 没有沉淀为中期记忆。异常排查：\n1. 确认整合任务是否真的在跑：对照\"整合运行\"面板的 ok 次数。\n2. 若任务在跑但产出 0：检查 episode 数量是否达到 min_items（默认 3），或 summarizer 是否返回空列表（查日志/代码）。\n3. 检查写入是否被去重/跳过：summary 内容与已有记忆重复会走 deduplicated，不增加产出计数。\n4. 修复 summarizer 或调整 min_items 后，观察 memory_consolidation_output_total 是否开始增长。"
     },
     {
       "id": 13,
@@ -599,7 +599,7 @@
         "x": 0,
         "y": 32
       },
-      "description": "Qdrant 检索/写入失败速率，按 search/upsert 区分；持续非 0 即代表向量依赖异常。"
+      "description": "Qdrant 检索/写入失败速率，按 search/upsert 区分；持续非 0 即代表向量依赖异常。异常排查：\n1. 确认 Qdrant 容器状态：docker compose ps qdrant，curl localhost:6333/healthz 看是否 alive。\n2. 看 Qdrant 日志（docker compose logs qdrant）和 stock-agent 日志中 qdrant 报错，区分是连接拒绝还是查询/写入失败。\n3. 检查 agent_memories collection 是否存在、磁盘空间是否占满、Qdrant 是否 OOM（容器重启次数）。\n4. 重启 Qdrant 或扩容后观察错误归零；若频繁复发，考虑给 Qdrant 加资源限制和健康检查告警。"
     },
     {
       "id": 14,
@@ -642,7 +642,7 @@
         "x": 8,
         "y": 32
       },
-      "description": "Qdrant search/upsert 延迟 P95，观察向量库性能瓶颈。"
+      "description": "Qdrant search/upsert 延迟 P95，观察向量库性能瓶颈。异常排查：\n1. 确认是否伴随错误率上升（Qdrant 错误面板），有错误时延迟高可能是重试造成的假象。\n2. 检查 collection 点数是否暴涨（对照有效记忆量面板），数据量大后索引和内存压力上升。\n3. 检查查询过滤条件是否命中 payload 索引（user_id/status/memory_type 等字段建议建 payload index）。\n4. 优化：控制 top_k、给高频过滤字段建索引、扩容 Qdrant 内存；修复后观察 P95 回落。"
     },
     {
       "id": 15,
@@ -685,7 +685,7 @@
         "x": 16,
         "y": 32
       },
-      "description": "当前各类型（profile/episode/procedural/summary）有效记忆数量的 Gauge；episode 只增不减说明 TTL/整合没生效。"
+      "description": "当前各类型（profile/episode/procedural/summary）有效记忆数量的 Gauge；episode 只增不减说明 TTL/整合没生效。异常排查：\n1. 先看 episode 是否真的在过期：查 agent_memories 中 expires_at 已过但 status='active' 的记录数（历史遗留需手动清理）。\n2. 确认 TTL 是否正常写入：新建 episode 后查 expires_at 是否等于 created_at+30 天（默认 default_episode_days）。\n3. 确认整合任务在跑：episode 应定期被整合成 summary 后淘汰，对照\"整合运行/产出\"面板。\n4. 若 TTL 和整合都正常但量不减：执行清理 SQL（UPDATE agent_memories SET status='deleted' WHERE status='active' AND expires_at<UTC_TIMESTAMP(3)）并观察曲线恢复平稳。"
     },
     {
       "id": 16,
@@ -733,7 +733,7 @@
         "x": 0,
         "y": 40
       },
-      "description": "新写入记忆的 TTL 时长 P50/P90（秒），正常集中在默认 30 天附近；异常偏低需排查 TTL 计算。"
+      "description": "新写入记忆的 TTL 时长 P50/P90（秒），正常集中在默认 30 天（2592000s）附近。异常排查：\n1. 先看\"异常 TTL\"面板：若非 0，说明有 expires_at ≤ created_at 的脏数据，优先处理。\n2. 若分布偏低/分散：检查写入方是否显式传了 expires_at（LLM 提取 MemoryExtractItem 或 API 调用），覆盖了引擎默认 30 天。\n3. 检查 default_episode_days 参数是否被改成小值（MemoryService 初始化处）。\n4. 修正 TTL 来源后观察分布回到 30 天附近；存量异常数据按清理 SQL 处理。"
     },
     {
       "id": 17,
@@ -790,7 +790,7 @@
         "x": 8,
         "y": 40
       },
-      "description": "1 小时内写入的 expires_at ≤ created_at 的脏记忆条数；非 0 表示 TTL 计算或数据导入存在 bug。"
+      "description": "1 小时内写入的 expires_at ≤ created_at 的脏记忆条数；非 0 表示 TTL 计算或数据导入存在 bug。异常排查：\n1. 非 0 即有问题：从日志或 API 调用方定位这些写入的来源（Agent 提取、手动 API、批量导入）。\n2. 检查代码中 expires_at 的计算逻辑：是否用了错误的时钟（如混用 UTC/本地时间）或把过期时间算在了创建时间之前。\n3. 检查导入/测试数据是否直接塞了过期时间戳（这类脏数据常见于造数脚本）。\n4. 修复代码/数据源后，清理存量脏数据（UPDATE status='deleted'），并确认该指标归零。"
     }
   ],
   "refresh": "30s",

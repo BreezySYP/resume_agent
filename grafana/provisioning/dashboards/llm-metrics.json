@@ -11,7 +11,7 @@
       "id": 1,
       "type": "timeseries",
       "title": "LLM 请求 QPS",
-      "description": "各模型/调用来源（ainvoke/invoke）的成功请求速率，反映 LLM 调用整体负载。",
+      "description": "各模型/调用来源（ainvoke/invoke）的成功请求速率，反映 LLM 调用整体负载。异常排查：\n1. 确认数据源正常：Prometheus Targets 中 stock-agent 是否 up，/metrics 是否能抓到 llm_requests_total。\n2. QPS 归零：检查服务是否存活、调用路径是否改走其他入口（代码里是否还走 invoke_with_metrics/ainvoke_with_metrics）。\n3. QPS 暴涨：对照错误率面板，若同步上升可能是失败重试风暴（如网络抖动导致指数退避重试）。\n4. 修复后观察 1~2 个抓取周期内 QPS 恢复；归零且服务正常时检查调用点是否被新代码绕过。",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -54,7 +54,7 @@
       "id": 2,
       "type": "timeseries",
       "title": "LLM 错误数",
-      "description": "各模型的失败调用速率；持续非 0 说明模型服务异常、超时或限流。",
+      "description": "各模型的失败调用速率；持续非 0 说明模型服务异常、超时或限流。异常排查：\n1. 从日志定位错误码：docker compose logs stock-agent | grep -iE 'llm|deepseek|error'，区分超时/401/429/500。\n2. 401/403：检查 API Key 配置（.env.prod 中 DEEPSEEK_API_KEY 等）是否失效或过期。\n3. 429/限流：检查账户额度与并发，降低并发或加退避重试；500/超时：检查模型服务端状态和网络。\n4. 按 model/source 维度拆分确认是否集中在某个模型，修复后观察错误归零。",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -97,7 +97,7 @@
       "id": 3,
       "type": "stat",
       "title": "LLM 整体错误率",
-      "description": "LLM 调用中失败占比，正常应接近 0；持续大于 1% 需要立即排查（模型服务/密钥/超时）。",
+      "description": "LLM 调用中失败占比，正常应接近 0；持续大于 1% 需要立即排查。异常排查：\n1. 看趋势排除瞬时抖动，确认是否持续 5 分钟以上。\n2. 检查是否伴随 QPS 暴涨（重试风暴会放大错误率），必要时先熔断/降级再排查根因。\n3. 检查账户余额/配额（deepseek 平台）、API key 状态、网络到模型服务的连通性。\n4. 修复后观察错误率回落；若反复出现，考虑给 LLM 调用加超时、重试上限和熔断。",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -154,7 +154,7 @@
       "id": 4,
       "type": "timeseries",
       "title": "LLM 延迟 P50/P95",
-      "description": "每次 LLM 调用的耗时分位（按模型/来源），直接反映模型响应速度与慢调用分布。",
+      "description": "每次 LLM 调用的耗时分位（按模型/来源），直接反映模型响应速度与慢调用分布。异常排查：\n1. 确认是否伴随错误率上升：超时重试会同时推高延迟和错误。\n2. 按 model/source 拆开定位：是特定模型慢还是全量慢（模型服务端负载、网络跨地域）。\n3. 检查输入长度：超长 prompt（如注入的记忆上下文过大）会显著增加首 token 时间，对照\"注入上下文长度\"面板。\n4. 优化方向：换更快模型、压缩上下文、降低并发争抢；修复后观察 P50/P95 回落。",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -202,7 +202,7 @@
       "id": 5,
       "type": "timeseries",
       "title": "LLM Token 消耗速率",
-      "description": "按类型（input/output/reasoning）的 token 消耗速率，用于估算成本与上下文用量（total 为汇总已排除）。",
+      "description": "按类型（input/output/reasoning）的 token 消耗速率，用于估算成本与上下文用量。异常排查：\n1. 拆开看哪类在涨：input 涨查注入上下文（对照 memory_recall_prompt_chars）；output 涨查回答长度；reasoning 涨查是否误开了推理/思考模式。\n2. 确认是否调用次数上涨（对照 LLM 请求 QPS），次数和单次用量要分开看。\n3. 检查是否有循环或重复调用场景（Agent 多轮反思、评估反复打分）放大消耗。\n4. 优化提示词、压缩上下文、缓存常用结果后，观察速率斜率放缓。",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -245,7 +245,7 @@
       "id": 6,
       "type": "timeseries",
       "title": "LLM Token 按模型",
-      "description": "各模型按 token 类型的消耗对比，快速定位成本大头和推理占比。",
+      "description": "各模型按 token 类型的消耗对比，快速定位成本大头和推理占比。异常排查：\n1. 确认是某模型调用量涨还是单次 token 涨：对照该模型的 QPS 和延迟面板。\n2. 看该模型的调用场景（source 标签：memory_write、eval、supervisor 等），定位成本来源。\n3. 若推理模型占比过高：评估是否业务真的需要推理，考虑降级到普通模型。\n4. 优化后观察该模型消耗占比下降；必要时按模型设置成本告警。",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -288,7 +288,7 @@
       "id": 7,
       "type": "timeseries",
       "title": "LLM Token 累计总量",
-      "description": "自启动以来的 token 累计消耗（含 total），观察长期成本水位。",
+      "description": "自启动以来的 token 累计消耗（含 total），观察长期成本水位。异常排查：\n1. 斜率变陡先对照 Token 速率面板，确认驱动因素（调用量 or 单次用量）。\n2. 检查是否有失控循环（Agent 反复重试、评估任务重复触发）造成重复消耗。\n3. 设置成本预算：按模型/来源做每日限额或 Grafana 告警，超出即通知。\n4. 优化后观察累计曲线斜率放缓；若已超预算，先在模型侧/调用侧限流再排查。",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

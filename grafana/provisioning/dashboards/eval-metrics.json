@@ -11,7 +11,7 @@
       "id": 1,
       "type": "timeseries",
       "title": "评估分数 P50/P90",
-      "description": "各评估维度分数的累计分布分位（自启动以来所有评估），单次观测也能立即出数；评估是低频数据，因此不用 rate。",
+      "description": "各评估维度分数的累计分布分位（自启动以来所有评估），单次观测也能立即出数。异常排查：\n1. 分数下降先确认是真实质量下降还是评估样本变化：抽样看最近 final_answer 质量，对比 golden_standard 是否被改动。\n2. 检查最近是否有 prompt、模型、知识库或检索链路的改动（对照改动时间线，观察分数拐点）。\n3. 按 metric 维度定位：faithfulness 低查回答是否脱离引用来源，answer_relevancy 低查检索召回，profile_* 低查记忆写入。\n4. 回滚可疑改动或针对性优化后，观察 P50/P90 回升。",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -59,7 +59,7 @@
       "id": 2,
       "type": "timeseries",
       "title": "评估运行速率",
-      "description": "评估任务执行次数（ok/error），error 增长说明评估链路（LLM/评分计算）出问题。",
+      "description": "评估任务执行次数（ok/error），error 增长说明评估链路（LLM/评分计算）出问题。异常排查：\n1. 速率归零：检查评估任务入口（eval 节点是否还在 graph 中、定时任务是否被停掉）。\n2. 速率暴涨：检查是否有循环触发（如对话每轮都重复跑整段评估）。\n3. 看服务日志确认 eval_node 执行情况，error 增长时对照\"评估错误率\"面板。\n4. 修复调度或触发逻辑后观察速率回到预期水平。",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -102,7 +102,7 @@
       "id": 3,
       "type": "stat",
       "title": "评估错误率",
-      "description": "评估任务中失败占比，正常应接近 0；持续大于 1% 需要排查评估链路。",
+      "description": "评估任务中失败占比，正常应接近 0；持续大于 1% 需要排查评估链路。异常排查：\n1. 看日志定位异常：docker compose logs stock-agent | grep -iE 'eval|score'，区分 LLM 评分失败还是数据问题。\n2. 评估依赖 LLM 打分：对照\"LLM 错误率/延迟\"面板，LLM 异常会直接传导到评估。\n3. 检查评估样本数据（golden_standard、profile 标注）是否损坏或格式变更导致解析失败。\n4. 修复 LLM 链路或样本数据后观察错误率回落。",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -159,7 +159,7 @@
       "id": 4,
       "type": "timeseries",
       "title": "评估耗时 P50/P95",
-      "description": "整段评估（含 LLM 评分调用）耗时的累计分位（自启动以来），单次运行也能立即出数；低频数据不用 rate。",
+      "description": "整段评估（含 LLM 评分调用）耗时的累计分位（自启动以来）。异常排查：\n1. 评估耗时主要由 LLM 评分驱动，先对照 LLM 延迟面板确认是否 LLM 变慢。\n2. 检查单次评估处理的样本数量是否暴涨（golden_standard 扩充、每轮评估样本增加）。\n3. 优化方向：并发评分、减少样本量、换更快模型；避免评估阻塞主链路（可异步化）。\n4. 优化后观察 P50/P95 回落。",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -207,7 +207,7 @@
       "id": 5,
       "type": "stat",
       "title": "评估分数最近值",
-      "description": "自启动以来各评估维度的累计 P50 分数；绿 ≥0.8、黄 0.6~0.8、红 <0.6，一眼看出整体质量水位（低频数据用累计而非 rate）。",
+      "description": "自启动以来各评估维度的累计 P50 分数；绿 ≥0.8、黄 0.6~0.8、红 <0.6。异常排查：\n1. 先看是整体变红还是单个 metric 变红，单维度问题定位更精准。\n2. 按维度处理：faithfulness 低→回答可能幻觉，检查引用来源与检索内容；answer_relevancy 低→问题理解或检索召回差；profile_recall/precision 低→记忆写入/画像不准。\n3. 对照最近代码/prompt 改动时间线，回滚可疑改动后观察该维度是否恢复绿色。\n4. 若持续红色：把该维度对应的样本捞出来人工复核，确认是评估标准问题还是真实质量问题。",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -269,7 +269,7 @@
       "id": 6,
       "type": "stat",
       "title": "评估运行累计",
-      "description": "自启动以来的评估成功/失败累计次数，看整体评估规模。",
+      "description": "自启动以来的评估成功/失败累计次数，看整体评估规模。异常排查：\n1. 看 ok/error 比例是否失衡：error 持续增长先对照\"评估错误率\"面板。\n2. 检查评估环境依赖：LLM API key、golden_standard 数据源、评估服务是否稳定。\n3. 若累计 error 在某个时间点开始阶梯式增长，回查该时间点前后的部署/配置变更。\n4. 修复后观察 error 累计曲线趋于水平、ok 继续增长。",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
