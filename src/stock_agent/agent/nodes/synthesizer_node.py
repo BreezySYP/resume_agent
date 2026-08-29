@@ -36,6 +36,12 @@ def synthesizer_node(state: AgentState) -> Dict[str, Any]:
         - 用户问题：{state.get("user_question", "")}
         - 中长记忆: {state.get("memory_context", "")}
 
+        生成要求（必须遵守）：
+        1. 所有财务、技术、新闻相关的数字与结论必须来自上面给出的数据，禁止编造或外推；
+        2. 数据中没有的指标或信息，明确写"数据缺失"，不要用模型自身知识猜测填充；
+        3. 关键结论尽量注明数据来源（技术面/基本面/新闻）；
+        4. 不要把模型记忆中的个股数据当作检索结果写入报告。
+
         严格按照以下 JSON Schema 输出：
         {InvestmentRecommendation.model_json_schema()}
     """
@@ -43,7 +49,7 @@ def synthesizer_node(state: AgentState) -> Dict[str, Any]:
     # 使用结构化输出
     structured_llm = llm | JsonOutputParser(pydantic_object=InvestmentRecommendation)
     if "reflections" in state.keys() and len(state["reflections"]) > 0:
-        final_prompt = final_prompt + """/n
+        final_prompt = final_prompt + """
         **之前的 Reflection 反馈（必须重视）**：
         {reflections}
 

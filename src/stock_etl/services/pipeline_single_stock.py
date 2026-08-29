@@ -29,6 +29,8 @@ from trading_calendar import next_trading_day
 
 QDRANT_NEWS_COLLECTION = "stock_news_hybrid"
 QDRANT_PROFILE_COLLECTION = "stock_profile_hybrid"
+NEWS_CHUNK_SIZE = 2000   # 长新闻切块嵌入，检索侧按 article_id 聚合回文章级
+NEWS_CHUNK_OVERLAP = 200
 TECHNICAL_WINDOW_DAYS = 180   # MA120 需要的最小历史窗口
 DEFAULT_START_DATE = "2025-01-01"
 
@@ -145,7 +147,14 @@ def run_news_step(code, name, start_date) -> None:
 
     mysql_writer.save_stock_news(df)
     news_df = pd.read_sql(f"SELECT * FROM stock_news WHERE code = {code} AND fetch_time >= '{start_date}'", con=engine.connect())
-    qdrant_writer.upsert_hybrid(news_df, QDRANT_NEWS_COLLECTION, build_stock_news_text, get_stock_news_payload)
+    qdrant_writer.upsert_hybrid(
+        news_df,
+        QDRANT_NEWS_COLLECTION,
+        build_stock_news_text,
+        get_stock_news_payload,
+        chunk_size=NEWS_CHUNK_SIZE,
+        chunk_overlap=NEWS_CHUNK_OVERLAP,
+    )
     
 
 
@@ -271,6 +280,6 @@ def get_name(code: str):
 
 if __name__ == "__main__":
     # main()
-    # print(get_codes())
-    print(get_name("000001"))
+    print(get_codes())
+    # print(get_name("000001"))
     # run_pipeline(["history", "profile", "news"])

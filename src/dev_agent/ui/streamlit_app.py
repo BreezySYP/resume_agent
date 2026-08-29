@@ -1,18 +1,21 @@
 """ui/streamlit_app.py — Streamlit 前端"""
-import streamlit as st
-from langchain_core.messages import HumanMessage
-from shared.configs.settings import GRAPH_CONFIG
-from rag.ingest import ingest_local_files
 import tempfile
 from pathlib import Path
+
+import streamlit as st
+from langchain_core.messages import HumanMessage
+from rag.ingest import ingest_local_files
+from shared.configs.settings import GRAPH_CONFIG
 
 
 def run_ui(agent) -> None:
     st.title("🤖 DevAgent — Multi-Agent RAG 助手")
     st.caption("RAG 知识库 + 实时搜索缓存 | Supervisor 多 Agent 协作")
 
-    if "messages"      not in st.session_state: st.session_state.messages      = []
-    if "ragas_history" not in st.session_state: st.session_state.ragas_history = []
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "ragas_history" not in st.session_state:
+        st.session_state.ragas_history = []
 
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
@@ -28,14 +31,15 @@ def run_ui(agent) -> None:
                 result = agent.invoke(
                     {"messages": [HumanMessage(content=prompt)],
                      "reflections": [], "human_feedback": "",
-                     "rag_contexts": [], "ragas_result": None},
+                     "ragas_result": None},
                     config=GRAPH_CONFIG,
                 )
                 final = result.get("final_answer", result["messages"][-1].content)
                 st.markdown(final)
                 if result.get("reflections"):
                     with st.expander("🤔 系统反思"):
-                        for r in result["reflections"]: st.write(r)
+                        for r in result["reflections"]:
+                            st.write(r)
                 if result.get("ragas_result"):
                     st.session_state.ragas_history.append(result["ragas_result"])
 
@@ -49,7 +53,8 @@ def run_ui(agent) -> None:
                 paths = []
                 for f in uploaded:
                     p = Path(tmp) / f.name
-                    p.write_bytes(f.read()); paths.append(str(p))
+                    p.write_bytes(f.read())
+                    paths.append(str(p))
                 n = ingest_local_files(paths)
                 st.success(f"✅ 成功导入 {n} 个 chunks")
 
@@ -62,4 +67,5 @@ def run_ui(agent) -> None:
                 col2.metric("Answer Relevancy", r.get("answer_relevancy"))
 
         if st.button("🗑️ 清空对话"):
-            st.session_state.messages = []; st.rerun()
+            st.session_state.messages = []
+            st.rerun()

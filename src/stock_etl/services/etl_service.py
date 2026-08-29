@@ -1,5 +1,5 @@
 """services/etl_service.py — ETL 任务触发 & 事件推送"""
-from constants import ETL_QUEUE_PREFIX
+from constants import DAILY_STEPS, ETL_QUEUE_PREFIX
 from services.pipeline_single_stock import get_codes, run_code_pipeline
 from shared.db.redis import push_queue
 
@@ -58,5 +58,9 @@ def run_code(job_id: str, code: str, steps: list[str]):
         except Exception as e:
             push_event(job_id, code, step, "failed",
                        f"处理{code} {step} 失败: {e}",
+                       
                        round(completed / total, 2), True)
         completed += 1
+
+if __name__ == "__main__":
+    run_all("any", DAILY_STEPS)

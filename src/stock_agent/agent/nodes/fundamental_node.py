@@ -155,5 +155,4 @@ def fundamental_node(state: AgentState) -> Dict[str, Any]:
     logger.info("获得基本面数据 {} 条", len(result))
     return {
         "stock_financial_factor": result,
-        "rag_contexts": [result]
     }

@@ -26,6 +26,8 @@ from trading_calendar import next_trading_day
 
 QDRANT_NEWS_COLLECTION = "stock_news_hybrid"
 QDRANT_PROFILE_COLLECTION = "stock_profile_hybrid"
+NEWS_CHUNK_SIZE = 2000
+NEWS_CHUNK_OVERLAP = 200
 TECHNICAL_WINDOW_DAYS = 180   # MA120 需要的最小历史窗口
 DEFAULT_START_DATE = "2025-01-01"
 
@@ -199,7 +201,14 @@ def run_news_qdrant_sync_step() -> None:
 
     news_df = load_df(f"SELECT * FROM stock_news WHERE date > '{last_at}'","stock_news")
     if not news_df.empty:
-        qdrant_writer.upsert_hybrid(news_df, QDRANT_NEWS_COLLECTION, build_stock_news_text, get_stock_news_payload)
+        qdrant_writer.upsert_hybrid(
+            news_df,
+            QDRANT_NEWS_COLLECTION,
+            build_stock_news_text,
+            get_stock_news_payload,
+            chunk_size=NEWS_CHUNK_SIZE,
+            chunk_overlap=NEWS_CHUNK_OVERLAP,
+        )
 
 def run_profile_qdrant_sync_step() -> None:
     cp = step_checkpoint.get_checkpoint("qdrant_sync")

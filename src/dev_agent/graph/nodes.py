@@ -157,7 +157,7 @@ def _run_ragas_async(state: AgentState, answer: str) -> dict | None:
             from packages.ragas_eval.evaluator import run_ragas
             scores = run_ragas(
                 question=first_human.content,
-                contexts=state.get("rag_contexts") or [],
+                contexts=[],
                 answer=answer,
                 llm=get_llm(),
             )

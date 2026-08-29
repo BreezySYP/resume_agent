@@ -63,6 +63,6 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
         "user_question": state["user_question"],
         "current_time": currtime,
         "errors": [CLEAR_MARK],
-        "rag_contexts": [CLEAR_MARK],
-        "reflections": []
+        "reflections": [],
+        "retry_count": 0
     }

@@ -4,6 +4,10 @@
 	"workspaceFolder": "/workspace",
 	"workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
 	"remoteUser": "root",
+	// 本地浏览器访问 devcontainer 里的服务：自动转发 3 个 uvicorn 端口
+	"forwardPorts": [8013, 8014, 8015],
+	// 同时把端口发布到宿主机 localhost（等价 docker -p），不依赖 VS Code 转发
+	"appPort": ["8013:8013", "8014:8014", "8015:8015"],
 	"customizations": {
 		"vscode": {
 			"extensions": [

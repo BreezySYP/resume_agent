@@ -9,7 +9,19 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             "env": {
-                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/src/stock_agent:${workspaceFolder}/src/dev_agent"
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/src/stock_agent:${workspaceFolder}/src/dev_agent:${workspaceFolder}/src/stock_etl"
+            }
+        },
+        {
+            "name": "Python: pipeline_single_stock",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/stock_etl/services/pipeline_single_stock.py",
+            "cwd": "${workspaceFolder}/src/stock_etl",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src/stock_etl:${workspaceFolder}/packages/shared/src:${workspaceFolder}/src/stock_agent"
             }
         },
         {

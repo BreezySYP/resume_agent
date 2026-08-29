@@ -58,5 +58,5 @@ def news_node(state: AgentState) -> Dict[str, Any]:
 
     return {
         "news_analysis": result["messages"][-1].content,
-        "rag_contexts": tool_outputs,
+        "news_items": tool_outputs,
     }

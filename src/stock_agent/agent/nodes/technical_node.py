@@ -147,5 +147,4 @@ def technical_node(state: AgentState) -> Dict[str, Any]:
 
     return {
         "stock_technique_factor": result,
-        "rag_contexts": [result]
     }

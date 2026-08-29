@@ -4,7 +4,8 @@
     
     // 关键：告诉 Pylance 额外搜索路径
     "python.analysis.extraPaths": [
-        "/workspace/packages/shared/src"
+        "/workspace/packages/shared/src",
+        "/workspace/src/stock_etl"
     ],
     
     "python.analysis.typeCheckingMode": "off",
@@ -14,6 +15,11 @@
     
     // Debug 配置
     "debugpy.debugJustMyCode": false,
-    "python-envs.defaultEnvManager": "ms-python.python:conda",
-    "python-envs.defaultPackageManager": "ms-python.python:conda"
+    "python-envs.defaultEnvManager": "ms-python.python:venv",
+    "python-envs.defaultPackageManager": "ms-python.python:pip",
+
+    // 修复：Python Environments 扩展默认的 "./**/.venv" 会让 PET 定位器 configure 永久挂起
+    // 导致左下角一直 "Discovering Python interpreters"、Pylance 无法启动、F12 失效。
+    // 工作区里的 .venv 由 UvWorkspace 定位器自动发现，无需此搜索路径。
+    "python-envs.workspaceSearchPaths": []
 }

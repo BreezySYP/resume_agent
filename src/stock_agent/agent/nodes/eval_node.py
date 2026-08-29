@@ -4,19 +4,31 @@ from event.decorator import node
 from loguru import logger
 from shared.agents.agent_state import AgentState
 
+_GROUNDING_FIELDS = (
+    "stock_financial_factor",
+    "stock_technique_factor",
+    "stock_profile",
+    "memory_context",
+    "news_items",
+)
+
+
+def _has_grounding_evidence(state) -> bool:
+    """五类 grounding 证据字段中任一非空即有证据。"""
+    return any(bool(state.get(field)) for field in _GROUNDING_FIELDS)
+
 
 @node(node_name="evaluation", title="基本面数据节点")
 async def eval_node(state: AgentState) -> dict:
     """在 final_answer 产生后执行"""
     answer = state.get("final_answer") or ""
-    contexts = state.get("rag_contexts") or []
 
-    if not answer or not contexts:
-        logger.error("no answer or contexts for feedback")
+    if not answer or not _has_grounding_evidence(state):
+        logger.error("no answer or grounding evidence for feedback")
         return {
             "ragas_result": {
                 "faithfulness": None,
-                "reason": "missing answer or context"
+                "reason": "missing answer or grounding evidence"
             }
         }
 

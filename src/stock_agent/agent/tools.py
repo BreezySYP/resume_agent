@@ -137,7 +137,7 @@ def search_news(stock_names: str, topk: int= 20):
         返回关于这个题材或领域里相关的新闻或者所设计的企业的公告
     """
     result =  search_similar.search_with_rerank(
-        stock_names, "stock_news_hybrid", "stock_news", build_stock_news_text, topk
+        stock_names, "stock_news_hybrid", "stock_news", build_stock_news_text, topk, group_key="article_id"
     )
     result["date"] = result["date"].dt.strftime("%Y-%m-%d %H:%M:%S")
     return result.to_dict(orient="records")

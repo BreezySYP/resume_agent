@@ -5861,6 +5861,7 @@ source = { virtual = "src/stock_etl" }
 dependencies = [
     { name = "akshare" },
     { name = "baostock" },
+    { name = "beautifulsoup4" },
     { name = "dbutils" },
     { name = "fastapi" },
     { name = "fastembed" },
@@ -5884,6 +5885,7 @@ dependencies = [
 requires-dist = [
     { name = "akshare", specifier = ">=1.10" },
     { name = "baostock", specifier = ">=0.8" },
+    { name = "beautifulsoup4", specifier = ">=4.12" },
     { name = "dbutils", specifier = ">=3.0" },
     { name = "fastapi", specifier = ">=0.138.2" },
     { name = "fastembed", specifier = ">=0.8.0" },

@@ -13,6 +13,7 @@ dependencies = [
     "baostock>=0.8",
     "akshare>=1.10",
     "requests>=2.31",
+    "beautifulsoup4>=4.12",
     "loguru>=0.7",
     "redis>=5.0",
     "qdrant-client>=1.18.0",
@@ -25,4 +26,3 @@ dependencies = [
 
 [tool.uv.sources]
 shared = { workspace = true }
-

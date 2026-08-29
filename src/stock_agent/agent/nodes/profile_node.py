@@ -1,4 +1,7 @@
-import json
+"""agent/nodes/profile_node.py — 股票档案节点：单轮并行检索 + 池级精排降级。"""
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
 from agent.tools import search_stock_profile
@@ -13,141 +16,111 @@ from shared.metrics.prome import invoke_with_metrics
 from shared.models.deepseek import get_deepseek
 from shared.text.stock_text import build_stock_profile_text
 
-MAX_ITER = 3
+PROFILE_TOP_K = 10  # 最终注入分析链路的股票池规模
+KEYWORD_LIMIT = 5  # 单次关键词生成上限
+PER_KEYWORD_TOP_K = 10  # 每个关键词的检索条数（池子上限约 50，rerank 负担可控）
 
 
-class SearchPlan(BaseModel):
-    finished: bool = Field(description="是否已经覆盖行业，可以结束搜索")
-    keywords: list[str] = Field(description="下一轮搜索关键词")
-    reason: str = Field(description="为什么生成这些关键词")
+class KeywordsPlan(BaseModel):
+    keywords: list[str] = Field(description="搜索关键词")
 
-@node(node_name="profile", title="股票档案节点")
-def profile_node(state: AgentState):
 
-    # 第一轮关键词
-    first_prompt = HumanMessage(content=f"""
+def _extract_keywords(question: str) -> list[str]:
+    """一次 LLM 调用生成搜索关键词；解析失败时降级为原始问题。"""
+    prompt = HumanMessage(
+        content=f"""
         用户问题：
-        {state["user_question"]}
+        {question}
 
         不要回答问题。
-        请提取3~5个搜索关键词。
+        请提取{KEYWORD_LIMIT}个以内的搜索关键词。
 
         例如：
         芯片 -> 芯片、半导体、集成电路
         机器人 -> 机器人、工业机器人、人形机器人
 
         仅返回JSON：
-        {{
-            "keywords":[]
-        }}
-    """)
+        {{"keywords": []}}
+    """
+    )
+    model = get_deepseek("deepseek-chat")
+    parser = JsonOutputParser(pydantic_object=KeywordsPlan)
+    try:
+        resp = invoke_with_metrics(model, [prompt], "stock_profile", "deepseek-chat")
+        plan = parser.parse(resp.content)
+        keywords = [str(k).strip() for k in plan["keywords"] if str(k).strip()]
+        if keywords:
+            return keywords[:KEYWORD_LIMIT]
+    except Exception as e:
+        logger.warning("profile keyword extraction failed, fallback to raw question: {}", e)
+    return [question]
 
-    model_name = "deepseek-chat"
-    model = get_deepseek(model=model_name)
-    parser = JsonOutputParser(pydantic_object=SearchPlan)
-    keywords = invoke_with_metrics(model, [first_prompt], "stock_profile", model_name).content
-    keywords = json.loads(keywords)["keywords"]
-    searched_keywords = set()
-    all_profiles = {}
 
-    for i in range(MAX_ITER):
-        logger.debug("start {} iter for profile node", i)
-        current_result = []
+def _search_keyword(kw: str) -> list[dict]:
+    try:
+        docs = search_stock_profile.invoke({"query": kw, "topk": PER_KEYWORD_TOP_K})
+        if isinstance(docs, dict):
+            docs = [docs]
+        return docs or []
+    except Exception as e:
+        logger.warning("profile search failed for keyword {}: {}", kw, e)
+        return []
 
-        # ---------- 搜索 ----------
-        for kw in keywords:
-            if kw in searched_keywords:
-                continue
-            searched_keywords.add(kw)
-            docs = search_stock_profile.invoke({"query": kw, "topk": 20})
-            if not docs:
-                continue
-            if isinstance(docs, dict):
-                docs = [docs]
-            current_result.extend(docs)
 
-        # ---------- 去重 ----------
-        for stock in current_result:
-            all_profiles[stock["code"]] = stock
+def _search_all(keywords: list[str]) -> list[dict]:
+    """并行检索所有关键词，单路失败不影响其他路。"""
+    with ThreadPoolExecutor(max_workers=min(KEYWORD_LIMIT, len(keywords))) as pool:
+        results = list(pool.map(_search_keyword, keywords))
+    merged: list[dict] = []
+    for docs in results:
+        merged.extend(docs)
+    return merged
 
-        companies = "\n".join(
-            f'{x["code"]} {x["name"]}'
-            for x in all_profiles.values()
+
+def _dedup(records: list[dict]) -> list[dict]:
+    """按 code 去重，保留首次出现。"""
+    seen: dict[str, dict] = {}
+    for r in records:
+        code = r.get("code")
+        if code is None:
+            continue
+        seen.setdefault(str(code), r)
+    return list(seen.values())
+
+
+def _rank(profiles: pd.DataFrame, question: str) -> pd.DataFrame:
+    """池级 rerank 精排；rerank 失败时降级按 original_score 排序。"""
+    df = profiles.copy()
+    # 与 Qdrant 写入时一致，用 build_stock_profile_text 构造 rerank 文本；
+    # scope 缺失/为空时用 business 兜底，避免 KeyError
+    if "scope" not in df.columns:
+        df["scope"] = ""
+    mask = df["scope"].isna() | (df["scope"].astype(str).str.strip() == "")
+    df.loc[mask, "scope"] = df["business"] if "business" in df.columns else ""
+    try:
+        scores = rerank(
+            query=question,
+            docs=[build_stock_profile_text(row) for _, row in df.iterrows()],
         )
+        df["rerank_score"] = scores["rerank_score"]
+        df = df.sort_values("rerank_score", ascending=False)
+    except Exception as e:
+        logger.warning("profile rerank failed, fallback to original_score: {}", e)
+        df["rerank_score"] = df.get("original_score", 0.0)
+        df = df.sort_values("original_score", ascending=False)
+    return df
 
-        business = "\n".join(
-            x.get("business", "")
-            for x in all_profiles.values()
-        )
-        SEARCH_PROMPT = """
-            你是一名A股行业研究员。
 
-            用户问题：
-            {question}
+@node(node_name="profile", title="股票档案节点")
+def profile_node(state: AgentState) -> dict:
+    question = state.get("user_question") or ""
+    keywords = _extract_keywords(question)
+    profiles = _dedup(_search_all(keywords))
+    if not profiles:
+        return {"stock_profile": []}
 
-            已经搜索过的关键词：
-            {searched_keywords}
-
-            目前已经召回的股票：
-            {companies}
-
-            经营范围摘要：
-            {business}
-
-            你的任务：
-            1. 判断目前行业覆盖是否完整
-            2. 如果不完整，请生成下一轮搜索关键词
-            3. 不要重复已经搜索过的关键词
-            4. 尽量覆盖整个产业链（上游、中游、下游）
-            5. 每轮最多生成5个关键词
-
-            返回JSON：
-            {format_instructions}
-            """
-        # ---------- Reflection ----------
-        prompt = HumanMessage(content=SEARCH_PROMPT.format(
-            question=state["user_question"],
-            searched_keywords=list(searched_keywords),
-            companies=companies,
-            business=business,
-            format_instructions=parser.get_format_instructions()
-        ))
-
-        response = model.invoke([prompt])
-        response = invoke_with_metrics(model, [prompt], "stock_profile", model_name)
-
-        plan = parser.parse(response.content)
-        if plan["finished"]:
-            break
-        keywords = plan["keywords"]
-
-    profiles = pd.DataFrame(list(all_profiles.values()))
-    scores = rerank(query=state["user_question"], docs=[build_stock_profile_text(row) for _, row in profiles.iterrows()])
-    profiles["rerank_score"] = scores["rerank_score"]
-    profiles = profiles.loc[profiles["rerank_score"].nlargest(20).index]
-    profiles = profiles.drop(columns=["scope"])
-    profiles = profiles.to_dict(orient="records")
-    # logger.debug("finish profile node")
-
-    # generate_golden_standard_with_llm(state["user_question"])
-  
-    return {
-        "stock_profile": profiles,
-        "rag_contexts": [profiles]
-    }
-
-if __name__ == "__main__":
-    
-    state = AgentState()
-    state["user_question"] = "国内AI应用前景如何，有什么投资建议，最好能帮我发现下半年最有可能暴增的冷门潜力股，而不是给我大家都知道的龙头股？"
-    state["job_id"] = "profile_job"
-    state["thread_id"] = "profile_thread"
-    # print(profile_node(state).get("stock_profile"))
-
-    # golden_standard = generate_golden_standard_from_candidates(
-    #     state["user_question"]
-    # )
-
-    # golden_eval = DynamicGoldenStandard()
-    # golden = golden_eval.get_golden_standard(state["user_question"])
-    # print(golden)
+    df = _rank(pd.DataFrame(profiles), question).head(PROFILE_TOP_K)
+    if "scope" in df.columns:
+        df = df.drop(columns=["scope"])
+    records = df.to_dict(orient="records")
+    return {"stock_profile": records}

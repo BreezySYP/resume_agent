@@ -1,10 +1,10 @@
 import asyncio
-import random
 import re
 from functools import lru_cache
 from typing import List
 
 import numpy as np
+from eval.context_text import clean_text, context_to_text, split_sentences
 from loguru import logger
 from shared.agents.agent_state import AgentState
 from shared.metrics.prome import ainvoke_with_metrics
@@ -22,6 +22,47 @@ def _get_model():
 _MAX_CLAIM_NUM = 10
 embeder = get_ollama_embedding()
 _SAMPLE_SIZE = 100
+_MAX_EMBED_CHARS = 300  # 单条文本截断长度，防止超长句子撑爆 bge-m3 上下文
+_EMBED_BATCH_SIZE = 8  # 单次 embed 的条数上限，分批调用避免 "input length exceeds context length"
+_MEMORY_PLACEHOLDER = "（暂无相关长期记忆）"
+_NEWS_TOOL_NOISE = re.compile(r"^Tool \w+ called")
+
+
+def _build_grounding_context(state: AgentState) -> str:
+    """按固定顺序组装 faithfulness 证据文本：
+    financial → technical → profile → memory → news，统一经 context_text 清洗。"""
+    parts: List[str] = []
+
+    for field in ("stock_financial_factor", "stock_technique_factor", "stock_profile"):
+        text = context_to_text(state.get(field) or [])
+        if text:
+            parts.append(text)
+
+    memory = (state.get("memory_context") or "").strip()
+    if memory and memory != _MEMORY_PLACEHOLDER:
+        parts.append(clean_text(memory))
+
+    news = context_to_text(state.get("news_items") or [])
+    if news:
+        news_lines = [
+            line
+            for line in news.splitlines()
+            if not _NEWS_TOOL_NOISE.match(line.strip())
+        ]
+        if news_lines:
+            parts.append("\n".join(news_lines))
+
+    return "\n\n".join(parts)
+
+
+def _embed_texts(texts: List[str]) -> np.ndarray:
+    """截断 + 分批 embed，避免单次请求输入超过 Ollama 模型上下文长度。"""
+    clipped = [t[:_MAX_EMBED_CHARS] for t in texts]
+    vectors: List[np.ndarray] = []
+    for i in range(0, len(clipped), _EMBED_BATCH_SIZE):
+        batch = clipped[i : i + _EMBED_BATCH_SIZE]
+        vectors.extend(embeder(batch))
+    return np.array(vectors)
 
 
 async def _chat(prompt: str) -> str:
@@ -52,38 +93,30 @@ async def _extract_claims(answer: str, question:str, max_claims: int ) -> List[s
     return claims
 
 
-def _split_into_sentences(text: str, min_len: int = 8) -> List[str]:
+def _deterministic_sample(items: List[str], cap: int) -> List[str]:
+    """超过 cap 时按位置均匀抽样（确定性），避免随机抽样把关键证据丢掉。"""
+    if len(items) <= cap:
+        return items
+    indices = np.linspace(0, len(items) - 1, cap).round().astype(int)
+    return [items[i] for i in dict.fromkeys(indices.tolist())]
+
+
+async def _claim_support(claim: str, evidence: List[str]) -> float:
+    """判断陈述被证据支持的程度：0.0 不支持 / 0.5 部分支持 / 1.0 完全支持。
+
+    原实现是严格二值判定（需要额外推理即 No），结论/建议类陈述会被一刀切，
+    导致 faithfulness 结构性偏低；改为三级打分后更接近真实支持度。
     """
-    中英文混合分句，避免把小数点当成句号。
-    """
-    if not text or not text.strip():
-        return []
-
-    # 1. 中文句子结束符：无条件切
-    # 2. 英文 .!? ：前后都不是数字才切（排除 120.3、3.14）
-    pattern = r'(?<=[。！？；])\s*|(?<!\d)(?<=[.!?])(?!\d)\s*'
-
-    parts = re.split(pattern, text)
-
-    sentences = []
-    for s in parts:
-        s = s.strip()
-        if len(s) >= min_len:
-            sentences.append(s)
-
-    return sentences
-
-
-async def _is_claim_supported(claim: str, evidence: List[str]) -> bool:
     if not evidence:
-        return False
+        return 0.0
     evidence_text = "\n".join(f"- {s}" for s in evidence)
     prompt = f"""你是一个严格的事实核查员。请判断「陈述」是否完全被「证据」支持。
 
         规则：
-        - 只有证据明确支持该陈述时，才回答 Yes
-        - 证据不足、部分支持或需要额外推理时，回答 No
-        - 只回答 Yes 或 No，不要解释
+        - 证据明确、完整支持该陈述：完全支持
+        - 证据支持陈述的大部分内容，或只需少量常识推理：部分支持
+        - 证据中没有依据，或需要大量额外推理：不支持
+        - 只回答三个词之一：完全支持 / 部分支持 / 不支持
 
         陈述：
         {claim}
@@ -92,8 +125,13 @@ async def _is_claim_supported(claim: str, evidence: List[str]) -> bool:
         {evidence_text}
 
         判断："""
-    ans = (await _chat(prompt)).lower()
-    return ans.startswith("yes") or ans.startswith("是")
+    ans = (await _chat(prompt)).strip()
+    if ans.startswith("完全"):
+        return 1.0
+    if ans.startswith("部分"):
+        return 0.5
+    return 0.0
+
 
 async def _claim_ok(
     claim, score, 
@@ -103,46 +141,48 @@ async def _claim_ok(
 ):
     async with sem:
         logger.debug(" debug claim ", claim[:10])
-        top_idx = np.argpartition(-score, top_k)[:top_k]
+        k = min(top_k, len(score))
+        top_idx = np.argpartition(-score, k - 1)[:k]
         top_idx = top_idx[np.argsort(-score[top_idx])]
         relevant = [
             sentences[j]
             for j in top_idx
             if score[j] >= 0.25
         ]
-        ok = await _is_claim_supported(claim, relevant)
-        return {"claim": claim, "supported": ok, "evidence": relevant}
+        support = await _claim_support(claim, relevant)
+        return {"claim": claim, "supported": support, "evidence": relevant}
 
 async def caculate_faithfulness_score(
     state: AgentState,
     max_claim_num: int = _MAX_CLAIM_NUM,
     max_cocurrency: int = 5,
-    topk : int = 5,
+    topk : int = 10,
 ):
-    """contexts 就是你的 rag_contexts 列表"""
+    """faithfulness：把 final_answer 拆成 claims，用 AgentState 结构化证据做支持度判定。"""
 
-    contexts = state.get("rag_contexts")
     answer = state.get("final_answer")
     question = state.get("user_question")
 
-    if answer is None or contexts is None or question is None :
-        raise RuntimeError(" state error: rag_contexts or answer or question not complete")
-
-    contexts = [str(c) for c in contexts]
+    if answer is None or question is None:
+        raise RuntimeError(" state error: answer or question not complete")
 
     claims = await _extract_claims(answer, question, max_claim_num)
     if not claims:
         return 0.0, []
-    sentences = _split_into_sentences("\n\n".join(contexts))
+    sentences = split_sentences(_build_grounding_context(state))
     if not sentences:
         return 0.0, []
 
-    claims = random.sample(claims, min(_SAMPLE_SIZE, len(claims)))
-    sentences =  random.sample(sentences, min(_SAMPLE_SIZE, len(sentences)))
+    claims = _deterministic_sample(claims, _SAMPLE_SIZE)
+    sentences = _deterministic_sample(sentences, _SAMPLE_SIZE)
 
     logger.debug("embed context and claim")
-    sent_embs = np.array(embeder(sentences))  # shape: (S, d) TODO use powerful or distributed embedding
-    claim_embs = np.array(embeder(claims))  # shape: (C, d)
+    sent_embs = _embed_texts(sentences)  # shape: (S, d)
+    claim_embs = _embed_texts(claims)  # shape: (C, d)
+
+    # 归一化成余弦相似度，避免未归一化 embedding 的点积被向量模长扭曲
+    sent_embs = sent_embs / np.maximum(np.linalg.norm(sent_embs, axis=1, keepdims=True), 1e-12)
+    claim_embs = claim_embs / np.maximum(np.linalg.norm(claim_embs, axis=1, keepdims=True), 1e-12)
 
     sem = asyncio.Semaphore(max_cocurrency)
     scores = claim_embs @ sent_embs.T
@@ -154,12 +194,12 @@ async def caculate_faithfulness_score(
 
     results = await asyncio.gather(*jobs)
 
-    return sum([ 1 for r in results if r["supported"] is True]) / len(results), results
+    return sum(r["supported"] for r in results) / len(results), results
 
 
 if __name__ == "__main__":
     state = AgentState()
-    state["rag_contexts"] = [
+    state["news_items"] = [
         {"query": "AI应用 AI+软件 A股 2026年8月 投资机会 中报",
         "follow_up_questions": "", 
         "answer": """The user's query seeks an analysis of investment opportunities in AI applications, specifically focusing on the AI+ software sector within A-shares for August 2026, 

@@ -2,19 +2,18 @@
 import pandas as pd
 from loguru import logger
 from service.cuda_service import rerank
-from service.sql_helper import fetch_by_ids, attach_scores
 from service.qdrant_search import search_dense, search_hybrid
+from service.sql_helper import attach_scores, fetch_by_ids
 
 
-
-def search_join(collection: str, table: str, query: str, top_k: int = 5) -> pd.DataFrame:
-    hits = search_dense(collection, query, top_k)
+def search_join(collection: str, table: str, query: str, top_k: int = 5, group_key: str | None = None) -> pd.DataFrame:
+    hits = search_dense(collection, query, top_k, group_key=group_key)
     df = fetch_by_ids(table, list(hits["id"]))
     return attach_scores(df, hits)
 
 
-def search_hybrid_join(collection: str, table: str, query: str, top_k: int = 5) -> pd.DataFrame:
-    hits = search_hybrid(collection, query, top_k)
+def search_hybrid_join(collection: str, table: str, query: str, top_k: int = 5, group_key: str | None = None) -> pd.DataFrame:
+    hits = search_hybrid(collection, query, top_k, group_key=group_key)
     df = fetch_by_ids(table, list(hits["id"]))
     return attach_scores(df, hits)
 
@@ -26,9 +25,10 @@ def search_with_rerank(
     build_text,
     top_k: int = 5,
     recall_k: int = 100,
+    group_key: str | None = None,
 ) -> pd.DataFrame:
     """混合召回 -> rerank -> top_k"""
-    results = search_hybrid_join(collection, table, query, top_k=recall_k)
+    results = search_hybrid_join(collection, table, query, top_k=recall_k, group_key=group_key)
     if results.empty:
         return results
     scores = rerank(query=query, docs=[build_text(row) for _, row in results.iterrows()])

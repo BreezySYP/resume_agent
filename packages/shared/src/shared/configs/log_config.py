@@ -27,8 +27,11 @@ def setup_logger():
     handlers = [
         {
             "sink": sys.stdout,
-            "level": "DEBUG",
-            "format": "{time:YYYY-MM-DD HH:mm:ss} | <level>{level:8}</level> | {message}",
+            "level": "INFO",
+            "format": (
+                "{time:YYYY-MM-DD HH:mm:ss} | <level>{level:8}</level> | "
+                "{file}:{line} | {name} | {message}"
+            ),
         },
     ]
 

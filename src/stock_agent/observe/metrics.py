@@ -5,9 +5,8 @@ from __future__ import annotations
 
 import time
 from contextlib import contextmanager
-from typing import Any, Optional
 
-from prometheus_client import Counter, Histogram, Info, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
 # ---------------------------------------------------------------------------
 # 评估分数：用 Histogram，便于看分布 + 算均值
@@ -15,7 +14,7 @@ from prometheus_client import Counter, Histogram, Info, generate_latest, CONTENT
 EVAL_SCORE = Histogram(
     "agent_eval_score",
     "Agent evaluation scores (0-1)",
-    labelnames=["metric"],  # faithfulness | answer_relevancy | profile_recall | profile_precision
+    labelnames=["metric"],  # faithfulness | answer_relevancy | profile_recall | profile_precision | citation_recall | citation_precision
     buckets=(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0),
 )
 
@@ -33,8 +32,15 @@ EVAL_DURATION = Histogram(
 
 
 def record_eval_scores(scores: dict) -> None:
-    """写入 4 个评估分。"""
-    for key in ("faithfulness", "answer_relevancy", "profile_recall", "profile_precision"):
+    """写入评估分（faithfulness / relevancy / pool 纯度 / citation 级 precision·recall）。"""
+    for key in (
+        "faithfulness",
+        "answer_relevancy",
+        "profile_recall",
+        "profile_precision",
+        "citation_recall",
+        "citation_precision",
+    ):
         val = scores.get(key)
         if val is None:
             continue

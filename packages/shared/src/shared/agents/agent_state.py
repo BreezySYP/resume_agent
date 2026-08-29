@@ -1,7 +1,7 @@
 import operator
-from typing import List, Optional, Sequence, TypedDict, Annotated
-from langgraph.graph import add_messages
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from typing import Annotated, List, Optional, Sequence, TypedDict
+
+from langchain_core.messages import AIMessage, HumanMessage
 
 CLEAR_MARK = "__CLEAR__"
 
@@ -16,7 +16,6 @@ class AgentState(TypedDict):
     reflections:    List[str]
     final_answer:   str
     human_feedback: str
-    rag_contexts: Annotated[List[str], clear_list] = []
     ragas_result:   Optional[dict] # 最新一次 RAGAS 评估结果
     user_question:  str
     retry_count:     int
