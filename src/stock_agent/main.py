@@ -1,5 +1,5 @@
 """stock_agent/main.py — Stock Agent API 入口"""
-from api import agent_router, eval_router, memory_router
+from api import agent_router, conversation_router, eval_router, memory_router
 from observe.metrics import metrics_content_type, metrics_response_body
 from shared.web.app import create_app
 
@@ -8,7 +8,12 @@ app = create_app(
     description="A股智能投研 Agent：基于 LangGraph 的多节点分析流程，SSE 实时推送回答进度。",
     version="0.1.0",
     service_name="stock-agent-api",
-    routers=[agent_router.router, eval_router.router, memory_router.router],
+    routers=[
+        agent_router.router,
+        conversation_router.router,
+        eval_router.router,
+        memory_router.router,
+    ],
     metrics_provider=lambda: (metrics_response_body(), metrics_content_type()),
 )
 

@@ -1,5 +1,6 @@
 """news 节点（确定性检索 + 结构化输出）与 AgentState 字段声明测试。"""
 from agent.nodes.news_node import (
+    NewsAnalysisResult,
     _build_news_prompt,
     _dedup_news,
     _filter_news_items_by_cited,
@@ -22,6 +23,12 @@ def test_news_prompt_requires_per_sentence_citation():
     assert "content" in str(prompt.content)
     assert "cited_news_ids" in str(prompt.content)
     assert "不得编造新闻" in str(prompt.content)
+    assert "不要输出任何思考过程、解释或前言" in str(prompt.content)
+
+
+def test_news_analysis_result_missing_cited_ids_defaults_to_empty():
+    result = NewsAnalysisResult.model_validate({"content": "正文【新闻id: 1001】。"})
+    assert result.cited_news_ids == []
 
 
 def test_search_stock_news_returns_docs_or_empty(monkeypatch):

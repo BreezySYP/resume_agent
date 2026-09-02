@@ -42,7 +42,10 @@ class NewsAnalysisResult(BaseModel):
     """新闻分析的结构化输出：逐句标注引用的正文 + 全部引用新闻 id。"""
 
     content: str = Field(description="带【新闻id】标注的逐句分析正文")
-    cited_news_ids: list[int] = Field(description="content 中实际引用的全部新闻 id，不含无")
+    cited_news_ids: list[int] = Field(
+        default_factory=list,
+        description="content 中实际引用的全部新闻 id，不含无；无法给出时可为空列表",
+    )
 
 
 def _news_dedup_key(record: dict):
@@ -109,6 +112,7 @@ def _build_news_prompt(current_time: str, stock_names: str, stock_profile: Any) 
         重点维度：情绪、政策利好、机构、风险、热点。
 
         输出要求（必须遵守）：
+        - 直接输出最终分析正文，不要输出任何思考过程、解释或前言（禁止以"我需要先…"、"好的"等开头）
         - content 按句子逐句书写，每个句子末尾标注该句引用的新闻 id，格式：【新闻id: 368541】或【新闻id: 368541, 368542】；句子没有对应新闻依据时标注【新闻id: 无】
         - cited_news_ids 汇总 content 中实际引用的所有 id，不含"无"；引用 id 只能来自 search_news 的搜索结果
         - 正文内容按实际分析书写，不得编造新闻
