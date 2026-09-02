@@ -3,7 +3,7 @@ from typing import Any, Dict
 
 from event.decorator import node
 from langchain_core.messages import SystemMessage
-from langchain_core.output_parsers import JsonOutputParser
+from loguru import logger
 from pydantic import BaseModel, Field
 from shared.agents.agent_state import AgentState
 from shared.metrics.prome import invoke_with_metrics
@@ -19,13 +19,10 @@ class InvestmentRecommendation(BaseModel):
     confidence_score: float = Field(..., ge=0, le=1)
     suggested_stocks: list[str] = Field(...)
 
-@node(node_name="synthesizer", title="综合分析节点")
-def synthesizer_node(state: AgentState) -> Dict[str, Any]:
 
-    model_name = "deepseek-chat"
-    llm = get_deepseek(model=model_name, temperature=0.1)
-    
-    final_prompt = f"""
+def _build_synthesizer_prompt(state: AgentState) -> str:
+    """构造综合报告 prompt：新闻分析的【新闻id】标注仅用于溯源，不得写进报告。"""
+    return f"""
         你是一个严谨的A股投资顾问。
         结合以下所有信息，给出专业投资分析报告。
 
@@ -40,14 +37,22 @@ def synthesizer_node(state: AgentState) -> Dict[str, Any]:
         1. 所有财务、技术、新闻相关的数字与结论必须来自上面给出的数据，禁止编造或外推；
         2. 数据中没有的指标或信息，明确写"数据缺失"，不要用模型自身知识猜测填充；
         3. 关键结论尽量注明数据来源（技术面/基本面/新闻）；
-        4. 不要把模型记忆中的个股数据当作检索结果写入报告。
+        4. 不要把模型记忆中的个股数据当作检索结果写入报告；
+        5. 新闻分析中的【新闻id】标注仅为内部溯源信息，最终报告禁止出现【新闻id】标注或任何新闻 id。
 
         严格按照以下 JSON Schema 输出：
         {InvestmentRecommendation.model_json_schema()}
     """
 
-    # 使用结构化输出
-    structured_llm = llm | JsonOutputParser(pydantic_object=InvestmentRecommendation)
+
+@node(node_name="synthesizer", title="综合分析节点")
+def synthesizer_node(state: AgentState) -> Dict[str, Any]:
+
+    model_name = "deepseek-chat"
+    llm = get_deepseek(model=model_name, temperature=0.1)
+    
+    final_prompt = _build_synthesizer_prompt(state)
+
     if "reflections" in state.keys() and len(state["reflections"]) > 0:
         final_prompt = final_prompt + """
         **之前的 Reflection 反馈（必须重视）**：
@@ -55,15 +60,29 @@ def synthesizer_node(state: AgentState) -> Dict[str, Any]:
 
         请根据 Reflection 改进输出。
         """.format(reflections=state["reflections"])
-    
-    recommendation: InvestmentRecommendation = invoke_with_metrics(
+
+    # 用 function calling 强制结构化输出，避免自由文本 JSON 解析失败
+    structured_llm = llm.with_structured_output(InvestmentRecommendation)
+    try:
+        recommendation: InvestmentRecommendation = invoke_with_metrics(
             structured_llm,
             [SystemMessage(content=final_prompt)],
             "synthesizer",
             model_name
         )
+        final_answer = recommendation.markdown_report
+    except Exception as e:
+        # 结构化输出失败时降级为纯文本报告，保证 reflection/eval 流程继续
+        logger.exception("synthesizer structured output failed: {}", e)
+        try:
+            raw = llm.invoke(
+                [SystemMessage(content=final_prompt + "\n直接输出纯文本 Markdown 报告，不要 JSON。")]
+            )
+            final_answer = str(raw.content)
+        except Exception:
+            final_answer = "报告生成失败，请稍后重试。"
 
     return {
-        "final_answer": recommendation["markdown_report"],
-        "messages": [SystemMessage(content=str(recommendation))]
+        "final_answer": final_answer,
+        "messages": [SystemMessage(content=final_answer)]
     }

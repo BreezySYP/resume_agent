@@ -29,8 +29,11 @@ def setup_logger():
             "sink": sys.stdout,
             "level": "INFO",
             "format": (
-                "{time:YYYY-MM-DD HH:mm:ss} | <level>{level:8}</level> | "
-                "{file}:{line} | {name} | {message}"
+                "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+                "<level>{level:8}</level> | "
+                "<cyan>{file}</cyan>:<cyan>{line}</cyan> | "
+                "<cyan>{name}</cyan> | "
+                "<level>{message}</level>"
             ),
         },
     ]

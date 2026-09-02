@@ -1,11 +1,11 @@
 
 import asyncio
-import re
 from datetime import datetime
 
 from agent.tools import search_stock_profile
 from eval.faithfulness import caculate_faithfulness_score
 from eval.golden_standard import get_golden_standard
+from eval.rag_input import extract_cited_codes, retrieved_codes, state_to_rag_context
 from loguru import logger
 from observe.metrics import record_eval_scores, track_eval_run
 from shared.agents.agent_state import AgentState
@@ -19,27 +19,38 @@ _tracer = get_tracer("stock_agent.ragas")
 _SEARCH_WIDTH = 200
 
 
-def _extract_cited_codes(answer: str, universe: set[str]) -> set[str]:
-    """从最终回答里解析实际引用的 A 股代码，只保留出现在检索/黄金集合内的代码，
-    避免把正文里的普通 6 位数字误当成股票代码。"""
-    if not answer:
-        return set()
-    codes = set(re.findall(r"[（(]\s*(\d{6})\s*[)）]", answer))
-    codes |= set(re.findall(r"(?<![0-9])\d{6}(?![0-9])", answer))
-    return {c for c in codes if c in universe}
+def _support_label(supported: float) -> str:
+    """把支持度分数映射为可读标签。"""
+    if supported >= 1.0:
+        return "完全支持"
+    if supported >= 0.5:
+        return "部分支持"
+    return "不支持"
 
 
-async def calculate_scores(state: AgentState):
+def build_faithfulness_claims(results) -> list[dict]:
+    """把逐 claim 评估结果整理成可读报告：claim / sentences / result。"""
+    return [
+        {
+            "claim": r["claim"],
+            "sentences": r["evidence"],
+            "result": _support_label(r["supported"]),
+        }
+        for r in results
+    ]
+
+
+async def calculate_scores(
+    state: AgentState,
+    *,
+    push_langsmith: bool = True,
+    include_claim_details: bool = True,
+):
     answer = state.get("final_answer")
     question = state.get("user_question")
-    stock_profile = state.get("stock_profile")
-    run_id = state.get("job_id")
+    rag_context = state_to_rag_context(state)
+    job_id = state.get("job_id")
 
-    if run_id is None:
-        logger.error("failed to give feedback: run_id is None")
-        return []
-    # stock_news = state.get("stock_news")
-        
     # 2. Answer Relevancy：回答是否切题
     rel_prompt = f"""请判断下面的回答与问题的相关程度。
         只输出 0 到 1 的分数（1 表示非常相关）。
@@ -59,9 +70,10 @@ async def calculate_scores(state: AgentState):
     with track_eval_run():
         candidate = search_stock_profile.invoke({"query": question, "topk": _SEARCH_WIDTH})
 
-        (faith_score, results), goldenStandard, rel_score = await asyncio.gather(caculate_faithfulness_score(state),
+        (faith_score, results), goldenStandard, rel_score = await asyncio.gather(
+                                                    caculate_faithfulness_score(answer, question, rag_context),
                                                     get_golden_standard(question, candidate), get_relavance())
-        retrived_codes = [profile["code"] for profile in stock_profile]
+        retrived_codes = retrieved_codes(rag_context)
         common_codes = set(goldenStandard) & set(retrived_codes)
         profile_recall = ( len(common_codes) / len(goldenStandard) ) if goldenStandard else 0.0
         profile_precision = (len(common_codes) / len(retrived_codes)) if retrived_codes else 0.0
@@ -70,7 +82,7 @@ async def calculate_scores(state: AgentState):
         # 不代表"推的股票对不对"，所以单独统计引用级 precision/recall。
         candidate_codes = {str(s.get("code")) for s in candidate if s.get("code")}
         universe = set(retrived_codes) | set(goldenStandard) | candidate_codes
-        cited_codes = _extract_cited_codes(answer, universe)
+        cited_codes = extract_cited_codes(answer, universe)
         cited_common = set(goldenStandard) & cited_codes
         citation_recall = (len(cited_common) / len(goldenStandard)) if goldenStandard else 0.0
         citation_precision = (len(cited_common) / len(cited_codes)) if cited_codes else 0.0
@@ -86,13 +98,16 @@ async def calculate_scores(state: AgentState):
             "question": question[:80],
         }
         record_eval_scores(scores=scores)
-        push_to_langsmith(scores, question, answer, run_id)
+        if include_claim_details:
+            scores["faithfulness_claims"] = build_faithfulness_claims(results)
+        if push_langsmith:
+            push_to_langsmith(scores, question, answer, job_id or "")
         return scores
 
 
 
 if  __name__ == "__main__":
-    state = AgentState()
+    state = {}
     from uuid import uuid4
 
     state["job_id"] = uuid4()

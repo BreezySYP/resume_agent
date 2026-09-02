@@ -3,7 +3,6 @@ from typing import Any
 
 from prometheus_client import Counter, Histogram
 
-
 # ---------------------------------------------------------------------------
 # LLM 宏观（若全局 ainvoke 已埋点可复用；这里给一份独立实现）
 # ---------------------------------------------------------------------------
@@ -92,11 +91,11 @@ async def ainvoke_with_metrics(model, prompt, source, model_name):
         )
         raise
 
-def invoke_with_metrics(model, prompt,source, model_name):
+def invoke_with_metrics(model, prompt, source, model_name, **kwargs):
     """带宏观埋点的 ainvoke。"""
     t0 = time.perf_counter()
     try:
-        resp = model.invoke(prompt)
+        resp = model.invoke(prompt, **kwargs)
         observe_llm_call(
             model=model_name,
             elapsed=time.perf_counter() - t0,

@@ -1,8 +1,6 @@
 """agent/nodes/profile_node.py — 股票档案节点：单轮并行检索 + 池级精排降级。"""
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
-
 import pandas as pd
 from agent.tools import search_stock_profile
 from event.decorator import node
@@ -15,6 +13,7 @@ from shared.agents.agent_state import AgentState
 from shared.metrics.prome import invoke_with_metrics
 from shared.models.deepseek import get_deepseek
 from shared.text.stock_text import build_stock_profile_text
+from shared.threads import ContextThreadPoolExecutor
 
 PROFILE_TOP_K = 10  # 最终注入分析链路的股票池规模
 KEYWORD_LIMIT = 5  # 单次关键词生成上限
@@ -69,7 +68,7 @@ def _search_keyword(kw: str) -> list[dict]:
 
 def _search_all(keywords: list[str]) -> list[dict]:
     """并行检索所有关键词，单路失败不影响其他路。"""
-    with ThreadPoolExecutor(max_workers=min(KEYWORD_LIMIT, len(keywords))) as pool:
+    with ContextThreadPoolExecutor(max_workers=min(KEYWORD_LIMIT, len(keywords))) as pool:
         results = list(pool.map(_search_keyword, keywords))
     merged: list[dict] = []
     for docs in results:

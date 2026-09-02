@@ -29,15 +29,15 @@ def build_investment_agent(checkpointer):
     default_retry = RetryPolicy(max_attempts=3, retry_on=[Exception])  # 可自定义异常
     
     workflow.add_node("supervisor", supervisor_node, retry_policy=default_retry)
-    workflow.add_node("profile", profile_node)
-    workflow.add_node("fundamental", fundamental_node)
-    workflow.add_node("technical", technical_node)
-    workflow.add_node("news", news_node)
-    workflow.add_node("synthesizer", synthesizer_node)
-    workflow.add_node("reflection", reflection_node)
-    workflow.add_node("eval", eval_node)
-    workflow.add_node("memory_write", memory_write_node)
-    workflow.add_node("memory_recall", memory_recall_node)
+    workflow.add_node("profile", profile_node, retry_policy=default_retry)
+    workflow.add_node("fundamental", fundamental_node, retry_policy=default_retry)
+    workflow.add_node("technical", technical_node, retry_policy=default_retry)
+    workflow.add_node("news", news_node, retry_policy=default_retry)
+    workflow.add_node("synthesizer", synthesizer_node, retry_policy=default_retry)
+    workflow.add_node("reflection", reflection_node, retry_policy=default_retry)
+    workflow.add_node("eval", eval_node, retry_policy=default_retry)
+    workflow.add_node("memory_write", memory_write_node, retry_policy=default_retry)
+    workflow.add_node("memory_recall", memory_recall_node, retry_policy=default_retry)
 
     
     # 边（并行结构清晰）

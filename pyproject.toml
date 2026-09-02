@@ -18,7 +18,7 @@ shared = { workspace = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=packages/shared/src/shared --cov=packages/rag_memory/src/rag_memory --cov=src/stock_agent --cov=src/stock_etl --cov-report=term-missing"
+addopts = "-p no:langsmith_plugin --cov=packages/shared/src/shared --cov=packages/rag_memory/src/rag_memory --cov=src/stock_agent --cov=src/stock_etl --cov-report=term-missing"
 pythonpath = [
     "packages/shared/src",
     "packages/rag_memory/src",

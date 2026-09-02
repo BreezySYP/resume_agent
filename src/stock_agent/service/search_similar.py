@@ -31,18 +31,23 @@ def search_with_rerank(
     results = search_hybrid_join(collection, table, query, top_k=recall_k, group_key=group_key)
     if results.empty:
         return results
-    scores = rerank(query=query, docs=[build_text(row) for _, row in results.iterrows()])
+    try:
+        scores = rerank(query=query, docs=[build_text(row) for _, row in results.iterrows()])
+    except Exception as e:
+        # rerank 服务超时/不可用时降级为召回分排序，避免整个检索链路中断
+        logger.warning("rerank failed, fallback to original_score: {}", e)
+        return results.loc[results["original_score"].nlargest(top_k).index]
     results = results.copy()
     results["rerank_score"] = scores["rerank_score"]
     return results.loc[results["rerank_score"].nlargest(top_k).index]
 
 
 if __name__ == "__main__":
-    from shared.text.stock_text import build_stock_profile_text
+    from shared.text.stock_text import build_stock_news_text
 
     logger.info("start search...")
     df = search_with_rerank(
-        "液冷服务器", "stock_profile_hybrid", "stock_profile", build_stock_profile_text, 20
+        "兆易创新（603986）股价从2026年6月29日高点846.66元跌至8月24日381.66元，跌幅超53%", "stock_news_hybrid", "stock_news", build_stock_news_text, 20
     )
     logger.success("finish search")
-    logger.info(df)
+    logger.info(df["content"].iloc[0])

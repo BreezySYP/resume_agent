@@ -334,8 +334,8 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "query": "label_values(agent_eval_score, metric)",
-        "definition": "label_values(agent_eval_score, metric)",
+        "query": "label_values(agent_eval_score_bucket, metric)",
+        "definition": "label_values(agent_eval_score_bucket, metric)",
         "includeAll": true,
         "multi": true,
         "allValue": ".*",

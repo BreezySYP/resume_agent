@@ -30,6 +30,9 @@ class AgentState(TypedDict):
     errors:  Annotated[List[str], clear_list] = []
     confidence: float = 0.0
     news_analysis: str
+    news_items: List[dict]
+    news_analysis_summary: str
+    news_cited_ids: List[int]
     markdown: str
     thread_id: str
     job_id: str

@@ -4,12 +4,13 @@ import requests
 from shared.configs.settings import CUDA_RERANK_URL
 
 
-def rerank(query: str, docs: list[str]) -> pd.DataFrame:
+def rerank(query: str, docs: list[str], timeout: int = 30) -> pd.DataFrame:
     resp = requests.post(
         CUDA_RERANK_URL, 
         json={"query": query, 
               "docs": docs},
-        timeout=10)
+        timeout=timeout)
+    resp.raise_for_status()
     scores = resp.json()["scores"]
     result = pd.DataFrame(zip(scores, docs))
     result.columns = ["rerank_score", "docs"]

@@ -28,10 +28,13 @@ def create_app(
     所有服务共用同一套：日志初始化、CORS、健康检查，以及可选的 /metrics 端点。
     """
 
+    # 在应用创建（模块导入）时尽早初始化日志，保证 uvicorn 自身的启动日志也走
+    # loguru 统一格式，而不是先输出 uvicorn 默认格式、等 lifespan 里才切换。
+    setup_logger()
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         logger.info("🚀 启动 {}", title)
-        setup_logger()
         yield
         logger.info("👋 {} 关闭", title)
 
