@@ -1,0 +1,22 @@
+CREATE TABLE `financial_statement` (
+  `code` varchar(20) NOT NULL,
+  `name` varchar(100) DEFAULT NULL,
+  `report_date` date NOT NULL,
+  `revenue` double DEFAULT NULL COMMENT '营业收入',
+  `net_profit` double DEFAULT NULL COMMENT '归母净利润',
+  `deduct_net_profit` double DEFAULT NULL COMMENT '扣非净利润',
+  `roe` double DEFAULT NULL COMMENT '净资产收益率(ROE)',
+  `roa` double DEFAULT NULL COMMENT '总资产收益率(ROA)',
+  `gross_margin` double DEFAULT NULL COMMENT '毛利率',
+  `net_margin` double DEFAULT NULL COMMENT '销售净利率',
+  `revenue_growth` double DEFAULT NULL COMMENT '营业收入增长率',
+  `profit_growth` double DEFAULT NULL COMMENT '归母净利润增长率',
+  `operating_cashflow` double DEFAULT NULL COMMENT '经营现金流量净额',
+  `fcf` double DEFAULT NULL COMMENT '自由现金流(每股/总量统一后)',
+  `asset_liability_ratio` double DEFAULT NULL COMMENT '资产负债率',
+  `equity_multiplier` double DEFAULT NULL COMMENT '权益乘数',
+  `eps` double DEFAULT NULL COMMENT '每股收益',
+  `bvps` double DEFAULT NULL COMMENT '每股净资产',
+  `ocfps` double DEFAULT NULL COMMENT '每股经营现金流',
+  PRIMARY KEY (`code`,`report_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

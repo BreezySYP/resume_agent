@@ -1,0 +1,135 @@
+{
+  "database": "mydb",
+  "captured_at": "2026-09-08T03:45:12.148704+00:00",
+  "note": "空表暂时跳过（无数据可迁移，需要时再从 schema.sql 重建）",
+  "tables": [
+    {
+      "name": "agent_memories",
+      "engine": "InnoDB",
+      "collation": "utf8mb4_unicode_ci",
+      "has_data": true,
+      "baseline_file": "mydb/agent_memories.sql",
+      "note": ""
+    },
+    {
+      "name": "capital_flow",
+      "engine": "InnoDB",
+      "collation": "utf8mb4_0900_ai_ci",
+      "has_data": true,
+      "baseline_file": "mydb/capital_flow.sql",
+      "note": ""
+    },
+    {
+      "name": "etl_checkpoint",
+      "engine": "InnoDB",
+      "collation": "utf8mb4_0900_ai_ci",
+      "has_data": true,
+      "baseline_file": "mydb/etl_checkpoint.sql",
+      "note": ""
+    },
+    {
+      "name": "etl_code_checkpoint",
+      "engine": "InnoDB",
+      "collation": "utf8mb4_0900_ai_ci",
+      "has_data": true,
+      "baseline_file": "mydb/etl_code_checkpoint.sql",
+      "note": ""
+    },
+    {
+      "name": "etl_job_log",
+      "engine": "InnoDB",
+      "collation": "utf8mb4_0900_ai_ci",
+      "has_data": true,
+      "baseline_file": "mydb/etl_job_log.sql",
+      "note": ""
+    },
+    {
+      "name": "financial_factor",
+      "engine": "InnoDB",
+      "collation": "utf8mb4_0900_ai_ci",
+      "has_data": true,
+      "baseline_file": "mydb/financial_factor.sql",
+      "note": ""
+    },
+    {
+      "name": "financial_feature",
+      "engine": "InnoDB",
+      "collation": "utf8mb4_0900_ai_ci",
+      "has_data": true,
+      "baseline_file": "mydb/financial_feature.sql",
+      "note": ""
+    },
+    {
+      "name": "financial_statement",
+      "engine": "InnoDB",
+      "collation": "utf8mb4_0900_ai_ci",
+      "has_data": true,
+      "baseline_file": "mydb/financial_statement.sql",
+      "note": ""
+    },
+    {
+      "name": "history",
+      "engine": "InnoDB",
+      "collation": "utf8mb4_0900_ai_ci",
+      "has_data": true,
+      "baseline_file": "mydb/history.sql",
+      "note": ""
+    },
+    {
+      "name": "history_job",
+      "engine": "InnoDB",
+      "collation": "utf8mb4_0900_ai_ci",
+      "has_data": false,
+      "baseline_file": null,
+      "note": "empty table: skipped（无数据）"
+    },
+    {
+      "name": "hot_sectors",
+      "engine": "InnoDB",
+      "collation": "utf8mb4_0900_ai_ci",
+      "has_data": true,
+      "baseline_file": "mydb/hot_sectors.sql",
+      "note": ""
+    },
+    {
+      "name": "stock_business_breakdown",
+      "engine": "InnoDB",
+      "collation": "utf8mb4_0900_ai_ci",
+      "has_data": true,
+      "baseline_file": "mydb/stock_business_breakdown.sql",
+      "note": ""
+    },
+    {
+      "name": "stock_factor",
+      "engine": "InnoDB",
+      "collation": "utf8mb4_0900_ai_ci",
+      "has_data": true,
+      "baseline_file": "mydb/stock_factor.sql",
+      "note": ""
+    },
+    {
+      "name": "stock_news",
+      "engine": "InnoDB",
+      "collation": "utf8mb4_0900_ai_ci",
+      "has_data": true,
+      "baseline_file": "mydb/stock_news.sql",
+      "note": ""
+    },
+    {
+      "name": "stock_profile",
+      "engine": "InnoDB",
+      "collation": "utf8mb4_0900_ai_ci",
+      "has_data": true,
+      "baseline_file": "mydb/stock_profile.sql",
+      "note": ""
+    },
+    {
+      "name": "technical_factor",
+      "engine": "InnoDB",
+      "collation": "utf8mb4_0900_ai_ci",
+      "has_data": true,
+      "baseline_file": "mydb/technical_factor.sql",
+      "note": ""
+    }
+  ]
+}

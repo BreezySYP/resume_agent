@@ -1,0 +1,22 @@
+CREATE TABLE `stock_news` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `code` varchar(20) NOT NULL,
+  `name` varchar(100) DEFAULT NULL,
+  `title` text NOT NULL,
+  `content` mediumtext,
+  `summary` text,
+  `date` datetime NOT NULL,
+  `fetch_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  `mediaName` varchar(100) DEFAULT NULL,
+  `url` text,
+  `source_type` enum('news','announcement','report') DEFAULT 'news',
+  `sector` varchar(50) DEFAULT NULL,
+  `importance_score` float DEFAULT '0.5',
+  `keywords` json DEFAULT NULL,
+  `embedding` text,
+  PRIMARY KEY (`id`),
+  KEY `idx_code_time` (`code`,`date`),
+  KEY `idx_publish` (`date`),
+  KEY `idx_source_type` (`source_type`),
+  FULLTEXT KEY `ft_title_content` (`title`,`content`)
+) ENGINE=InnoDB AUTO_INCREMENT=426528 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='全市场新闻表 - 支持全局RAG和因子发现';
