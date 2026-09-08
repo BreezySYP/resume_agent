@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException
-from langchain_core.messages import AIMessage, SystemMessage
-from shared.agents.checkpoint import get_aredis_checkpointer
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from loguru import logger
+from shared.agents.checkpoint import get_shared_aredis_checkpointer
 
 router = APIRouter(prefix="/api/ai", tags=["Conversation"])
 
 
 def _content_of(message) -> str | None:
     """提取消息正文；空消息返回 None。"""
-    if not isinstance(message, (SystemMessage, AIMessage)):
+    if not isinstance(message, (HumanMessage, SystemMessage, AIMessage)):
         return None
     content = message.content
     if isinstance(content, list):
@@ -23,51 +23,20 @@ def _content_of(message) -> str | None:
     return str(content) if content else None
 
 
-def _serialize(value) -> str:
-    """dict/list 序列化成 JSON 字符串，普通字符串原样返回。"""
-    if isinstance(value, str):
-        return value
-    try:
-        return json.dumps(value, ensure_ascii=False)
-    except Exception:
-        return str(value)
-
-
 def build_conversation(state: Dict[str, Any]) -> Dict[str, Any]:
-    """把 checkpoint state 整理成带角色标注的扁平条目列表。"""
+    """把 checkpoint state 的 messages 通道整理成带角色标注的扁平条目列表。"""
     items: List[Dict[str, Any]] = []
-
-    user_question = state.get("user_question")
-    if not user_question:
-        # 回退：messages 里第一条纯字符串（supervisor 写入的用户问题）
-        for message in state.get("messages") or []:
-            if isinstance(message, str) and message.strip():
-                user_question = message
-                break
-    if user_question:
-        items.append({"role": "user", "type": "user_question", "content": str(user_question)})
-
-    plan = state.get("plan")
-    if plan:
-        items.append({"role": "reasoning", "type": "plan", "content": _serialize(plan)})
-
-    news_analysis = state.get("news_analysis")
-    if news_analysis:
-        items.append(
-            {"role": "reasoning", "type": "news_analysis", "content": str(news_analysis)}
-        )
-
     for message in state.get("messages") or []:
-        if isinstance(message, str):
-            continue
-        content = _content_of(message)
-        if content:
-            items.append({"role": "agent", "type": "report", "content": content})
-
-    for reflection in state.get("reflections") or []:
-        items.append(
-            {"role": "reasoning", "type": "reflection", "content": _serialize(reflection)}
-        )
+        if isinstance(message, str) and message.strip():
+            items.append({"role": "user", "type": "user_question", "content": message})
+        elif isinstance(message, HumanMessage):
+            content = _content_of(message)
+            if content:
+                items.append({"role": "user", "type": "user_question", "content": content})
+        else:
+            content = _content_of(message)
+            if content:
+                items.append({"role": "agent", "type": "report", "content": content})
 
     return {
         "items": items,
@@ -78,8 +47,14 @@ def build_conversation(state: Dict[str, Any]) -> Dict[str, Any]:
 @router.get("/threads/{thread_id}/conversation", summary="获取短期 RedisSaver 中的对话")
 async def get_conversation(thread_id: str) -> dict:
     config = {"configurable": {"thread_id": thread_id}}
-    async with get_aredis_checkpointer() as cp:
+    try:
+        cp = await get_shared_aredis_checkpointer()
         snapshot = await cp.aget_tuple(config)
+    except Exception as e:
+        logger.exception("checkpointer read failed (thread={}): {}", thread_id, e)
+        raise HTTPException(
+            status_code=503, detail="对话存储（Redis）暂不可用，请稍后重试"
+        ) from e
     if snapshot is None:
         raise HTTPException(status_code=404, detail=f"thread not found: {thread_id}")
 
@@ -91,3 +66,21 @@ async def get_conversation(thread_id: str) -> dict:
         "current_time": state.get("current_time"),
         **conversation,
     }
+
+
+@router.delete("/threads/{thread_id}", summary="清空某个线程的 RedisSaver 对话数据")
+async def delete_conversation(thread_id: str) -> dict:
+    config = {"configurable": {"thread_id": thread_id}}
+    try:
+        cp = await get_shared_aredis_checkpointer()
+        snapshot = await cp.aget_tuple(config)
+        if snapshot is not None:
+            await cp.adelete_thread(thread_id)
+    except Exception as e:
+        logger.exception("delete thread failed (thread={}): {}", thread_id, e)
+        raise HTTPException(
+            status_code=503, detail="对话存储（Redis）暂不可用，请稍后重试"
+        ) from e
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail=f"thread not found: {thread_id}")
+    return {"deleted": True, "thread_id": thread_id}

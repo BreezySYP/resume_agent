@@ -26,11 +26,23 @@ def search_with_rerank(
     top_k: int = 5,
     recall_k: int = 100,
     group_key: str | None = None,
+    rerank_cap: int = 50,
 ) -> pd.DataFrame:
-    """混合召回 -> rerank -> top_k"""
+    """混合召回 -> rerank -> top_k
+
+    group_key 聚合可能返回数百条（chunk×4），全量 rerank 太慢，先按召回分
+    截到 rerank_cap 条再 rerank。
+    """
     results = search_hybrid_join(collection, table, query, top_k=recall_k, group_key=group_key)
     if results.empty:
         return results
+    if rerank_cap and len(results) > rerank_cap:
+        if "original_score" in results.columns:
+            results = results.sort_values(
+                "original_score", ascending=False, na_position="last"
+            ).head(rerank_cap)
+        else:
+            results = results.head(rerank_cap)
     try:
         scores = rerank(query=query, docs=[build_text(row) for _, row in results.iterrows()])
     except Exception as e:
@@ -47,7 +59,7 @@ if __name__ == "__main__":
 
     logger.info("start search...")
     df = search_with_rerank(
-        "兆易创新（603986）股价从2026年6月29日高点846.66元跌至8月24日381.66元，跌幅超53%", "stock_news_hybrid", "stock_news", build_stock_news_text, 20
+        "影石创新", "stock_news_hybrid", "stock_news", build_stock_news_text, 20
     )
     logger.success("finish search")
     logger.info(df["content"].iloc[0])

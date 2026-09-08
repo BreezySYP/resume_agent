@@ -1,38 +1,31 @@
-"""对话历史 API：build_conversation 与端点单测（不触发外部服务）。"""
+"""对话历史 API：build_conversation 与 GET/DELETE 端点单测（不触发外部服务）。"""
 from api import conversation_router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 
-def test_build_conversation_full_state():
+def test_build_conversation_from_messages_only():
     state = {
         "user_question": "白酒板块怎么看",
-        "plan": {"plan_summary": "分析白酒", "focus_areas": ["news"]},
-        "news_analysis": "白酒处于筑底期【新闻id: 1】",
+        "plan": {"plan_summary": "不应出现在对话里"},
+        "reflections": ["也不应出现"],
         "messages": [
             "白酒板块怎么看",
             SystemMessage(content="报告一"),
             SystemMessage(content="报告二"),
         ],
-        "reflections": ["建议补充风险", "PASS"],
         "final_answer": "报告二",
     }
     result = conversation_router.build_conversation(state)
-    roles_types = [(item["role"], item["type"]) for item in result["items"]]
-    assert roles_types == [
+    assert [(item["role"], item["type"]) for item in result["items"]] == [
         ("user", "user_question"),
-        ("reasoning", "plan"),
-        ("reasoning", "news_analysis"),
         ("agent", "report"),
         ("agent", "report"),
-        ("reasoning", "reflection"),
-        ("reasoning", "reflection"),
     ]
     assert result["items"][0]["content"] == "白酒板块怎么看"
-    assert "plan_summary" in result["items"][1]["content"]
-    assert result["items"][3]["content"] == "报告一"
-    assert result["items"][4]["content"] == "报告二"
+    assert result["items"][1]["content"] == "报告一"
+    assert result["items"][2]["content"] == "报告二"
     assert result["final_answer"] == "报告二"
 
 
@@ -42,26 +35,21 @@ def test_build_conversation_minimal_state():
     assert result["final_answer"] is None
 
 
-def test_build_conversation_user_question_fallback():
-    state = {
-        "messages": ["用户问题", SystemMessage(content="报告")],
-        "final_answer": "报告",
-    }
-    result = conversation_router.build_conversation(state)
-    assert result["items"][0] == {
-        "role": "user",
-        "type": "user_question",
-        "content": "用户问题",
-    }
-    assert result["items"][1]["role"] == "agent"
+def test_build_conversation_user_from_string_and_human_message():
+    result = conversation_router.build_conversation(
+        {"messages": ["字符串问题", HumanMessage(content="消息对象问题"), SystemMessage(content="报告")]}
+    )
+    assert [(item["role"], item["content"]) for item in result["items"]] == [
+        ("user", "字符串问题"),
+        ("user", "消息对象问题"),
+        ("agent", "报告"),
+    ]
 
 
 def test_build_conversation_skips_empty_messages():
-    state = {
-        "user_question": "q",
-        "messages": [SystemMessage(content=""), SystemMessage(content="有内容")],
-    }
-    result = conversation_router.build_conversation(state)
+    result = conversation_router.build_conversation(
+        {"messages": [SystemMessage(content=""), SystemMessage(content="有内容")]}
+    )
     agent_items = [item for item in result["items"] if item["role"] == "agent"]
     assert len(agent_items) == 1
     assert agent_items[0]["content"] == "有内容"
@@ -75,20 +63,28 @@ class _FakeSnapshot:
 class _FakeCP:
     def __init__(self, snapshot):
         self._snapshot = snapshot
+        self.deleted: list[str] = []
 
     async def aget_tuple(self, config):
         return self._snapshot
 
+    async def adelete_thread(self, thread_id):
+        self.deleted.append(thread_id)
 
-class _FakeCM:
-    def __init__(self, snapshot):
-        self._snapshot = snapshot
 
-    async def __aenter__(self):
-        return _FakeCP(self._snapshot)
+class _BoomCP:
+    async def aget_tuple(self, config):
+        raise RuntimeError("redis down")
 
-    async def __aexit__(self, *args):
-        return None
+    async def adelete_thread(self, thread_id):
+        raise AssertionError("adelete_thread 不应在 Redis 不可用时被调用")
+
+
+def _patch_shared_cp(monkeypatch, cp):
+    async def _get():
+        return cp
+
+    monkeypatch.setattr(conversation_router, "get_shared_aredis_checkpointer", _get)
 
 
 def _client() -> TestClient:
@@ -103,24 +99,53 @@ def test_get_conversation_200(monkeypatch):
         "final_answer": "a",
         "job_id": "j-1",
         "current_time": "2026-09-02",
+        "messages": ["q", SystemMessage(content="a")],
     }
-    monkeypatch.setattr(
-        conversation_router, "get_aredis_checkpointer", lambda: _FakeCM(_FakeSnapshot(state))
-    )
+    cp = _FakeCP(_FakeSnapshot(state))
+    _patch_shared_cp(monkeypatch, cp)
     resp = _client().get("/api/ai/threads/t1/conversation")
     assert resp.status_code == 200
     body = resp.json()
     assert body["thread_id"] == "t1"
     assert body["job_id"] == "j-1"
-    assert body["current_time"] == "2026-09-02"
     assert body["final_answer"] == "a"
-    assert body["items"][0]["role"] == "user"
+    assert [(item["role"], item["type"]) for item in body["items"]] == [
+        ("user", "user_question"),
+        ("agent", "report"),
+    ]
 
 
 def test_get_conversation_404(monkeypatch):
-    monkeypatch.setattr(
-        conversation_router, "get_aredis_checkpointer", lambda: _FakeCM(None)
-    )
+    _patch_shared_cp(monkeypatch, _FakeCP(None))
     resp = _client().get("/api/ai/threads/nope/conversation")
     assert resp.status_code == 404
-    assert "thread not found" in resp.json()["detail"]
+
+
+def test_delete_conversation_200(monkeypatch):
+    cp = _FakeCP(_FakeSnapshot({"messages": []}))
+    _patch_shared_cp(monkeypatch, cp)
+    resp = _client().delete("/api/ai/threads/t1")
+    assert resp.status_code == 200
+    assert resp.json() == {"deleted": True, "thread_id": "t1"}
+    assert cp.deleted == ["t1"]
+
+
+def test_delete_conversation_404(monkeypatch):
+    cp = _FakeCP(None)
+    _patch_shared_cp(monkeypatch, cp)
+    resp = _client().delete("/api/ai/threads/nope")
+    assert resp.status_code == 404
+    assert cp.deleted == []
+
+
+def test_get_conversation_503_when_redis_down(monkeypatch):
+    _patch_shared_cp(monkeypatch, _BoomCP())
+    resp = _client().get("/api/ai/threads/t1/conversation")
+    assert resp.status_code == 503
+    assert "Redis" in resp.json()["detail"]
+
+
+def test_delete_conversation_503_when_redis_down(monkeypatch):
+    _patch_shared_cp(monkeypatch, _BoomCP())
+    resp = _client().delete("/api/ai/threads/t1")
+    assert resp.status_code == 503

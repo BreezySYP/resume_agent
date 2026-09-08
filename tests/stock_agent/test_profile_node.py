@@ -188,3 +188,57 @@ def test_rerank_text_uses_build_stock_profile_text_with_scope_fallback(monkeypat
         }
     )
     assert captured["docs"][-1] == expected_without_scope
+
+
+def _run_profile_flow(monkeypatch, review_result):
+    """跑通 profile_node 主流程：关键词→检索→rerank→审核，返回 stock_profile。"""
+    monkeypatch.setattr(pn, "invoke_with_metrics", _fake_llm('{"keywords": ["芯片"]}'))
+
+    def _search(args):
+        return [_profile(c) for c in range(600001, 600013)]
+
+    monkeypatch.setattr(pn, "search_stock_profile", SimpleNamespace(invoke=_search))
+    monkeypatch.setattr(pn, "rerank", _noop_rerank)
+    monkeypatch.setattr(pn, "_review_profiles", lambda question, candidates: review_result)
+    return pn.profile_node({"user_question": "q", "job_id": "j", "thread_id": "t"})[
+        "stock_profile"
+    ]
+
+
+def test_review_keeps_only_named_codes(monkeypatch, _patch_llm):
+    records = _run_profile_flow(monkeypatch, ["600005"])
+    assert [r["code"] for r in records] == ["600005"]
+
+
+def test_review_empty_returns_top10(monkeypatch, _patch_llm):
+    records = _run_profile_flow(monkeypatch, [])
+    assert [r["code"] for r in records] == [str(c) for c in range(600001, 600011)]
+
+
+def test_review_codes_not_in_pool_falls_back_top10(monkeypatch, _patch_llm):
+    records = _run_profile_flow(monkeypatch, ["999999"])
+    assert [r["code"] for r in records] == [str(c) for c in range(600001, 600011)]
+
+
+def test_review_profiles_returns_keep_codes(monkeypatch):
+    monkeypatch.setattr(
+        pn,
+        "get_deepseek",
+        lambda model="deepseek-chat", temperature=0.0: SimpleNamespace(
+            with_structured_output=lambda schema: "structured-chain"
+        ),
+    )
+    monkeypatch.setattr(
+        pn,
+        "invoke_with_metrics",
+        lambda model, prompt, source, model_name: SimpleNamespace(keep_codes=["600001"]),
+    )
+    assert pn._review_profiles("兆易创新怎么样？", [{"code": "600001", "name": "兆易创新"}]) == [
+        "600001"
+    ]
+
+
+def test_review_profiles_failure_returns_empty(monkeypatch):
+    monkeypatch.setattr(pn, "invoke_with_metrics", _fake_llm("", fail=True))
+    assert pn._review_profiles("q", [{"code": "600001", "name": "公司600001"}]) == []
+    assert pn._review_profiles("q", []) == []

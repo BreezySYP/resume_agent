@@ -18,7 +18,7 @@ def _has_grounding_evidence(state) -> bool:
     return any(bool(state.get(field)) for field in _GROUNDING_FIELDS)
 
 
-@node(node_name="evaluation", title="基本面数据节点")
+@node(node_name="evaluation", title="评估节点")
 async def eval_node(state: AgentState) -> dict:
     """在 final_answer 产生后执行"""
     answer = state.get("final_answer") or ""

@@ -58,7 +58,7 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
         plan = {"current_time": currtime, "plan_summary": "解析失败", "focus_areas": ["fundamental", "news"]}
 
     return {
-        "messages": [state["user_question"]],
+        "messages": [HumanMessage(content=state["user_question"])],
         "plan": plan,
         "user_question": state["user_question"],
         "current_time": currtime,

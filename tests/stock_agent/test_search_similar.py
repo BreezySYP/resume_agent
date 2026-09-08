@@ -37,3 +37,28 @@ def test_search_with_rerank_uses_rerank_score(monkeypatch):
         "q", "c", "t", lambda row: "text", top_k=2
     )
     assert result["code"].tolist() == ["600001", "600003"]
+
+
+def test_search_with_rerank_caps_rerank_input(monkeypatch):
+    big = pd.DataFrame(
+        [
+            {"id": i, "code": f"60{i:04d}", "original_score": float(1000 - i)}
+            for i in range(1, 80)
+        ]
+    )
+    captured = {}
+
+    def fake_rerank(query, docs, timeout=30):
+        captured["docs"] = docs
+        return pd.DataFrame(
+            {"rerank_score": [float(len(docs) - j) for j in range(len(docs))], "docs": docs}
+        )
+
+    monkeypatch.setattr(search_similar, "rerank", fake_rerank)
+    monkeypatch.setattr(search_similar, "search_hybrid_join", lambda *a, **k: big)
+
+    result = search_similar.search_with_rerank(
+        "q", "c", "t", lambda row: "text", top_k=3, rerank_cap=50
+    )
+    assert len(captured["docs"]) == 50
+    assert len(result) == 3

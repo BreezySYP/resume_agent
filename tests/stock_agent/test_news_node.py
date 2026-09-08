@@ -4,7 +4,7 @@ from agent.nodes.news_node import (
     _build_news_prompt,
     _dedup_news,
     _filter_news_items_by_cited,
-    _search_stock_news,
+    _search_news,
     _strip_news_record,
 )
 from shared.agents.agent_state import AgentState
@@ -17,9 +17,16 @@ def test_agent_state_declares_news_items():
 
 
 def test_news_prompt_requires_per_sentence_citation():
-    prompt = _build_news_prompt("2026-08-31", "能科科技 科远智慧", [{"name": "能科科技"}])
+    prompt = _build_news_prompt(
+        "2026-08-31",
+        "能科科技 科远智慧",
+        [{"id": 1001, "name": "能科科技", "title": "中报发布", "content": "净利增长。"}],
+    )
+    text = str(prompt.content)
+    assert "[1001] 能科科技 中报发布" in text
+    assert "净利增长" in text
     assert "新闻id" in str(prompt.content)
-    assert "引用 id 只能来自 search_news" in str(prompt.content)
+    assert "引用 id 只能来自上面新闻数据里的 [新闻id]" in str(prompt.content)
     assert "content" in str(prompt.content)
     assert "cited_news_ids" in str(prompt.content)
     assert "不得编造新闻" in str(prompt.content)
@@ -31,13 +38,14 @@ def test_news_analysis_result_missing_cited_ids_defaults_to_empty():
     assert result.cited_news_ids == []
 
 
-def test_search_stock_news_returns_docs_or_empty(monkeypatch):
+def test_search_news_returns_docs_or_empty(monkeypatch):
     docs = [{"id": 1, "code": "600001", "title": "A"}]
     monkeypatch.setattr(
         "agent.nodes.news_node.search_news",
         type("Tool", (), {"invoke": lambda self, kwargs: docs})(),
     )
-    assert _search_stock_news("公司600001") == docs
+    assert _search_news(["公司600001", "公司600002"]) == docs
+    assert docs  # 上面已断言
 
     def boom(kwargs):
         raise RuntimeError("search down")
@@ -46,7 +54,7 @@ def test_search_stock_news_returns_docs_or_empty(monkeypatch):
         "agent.nodes.news_node.search_news",
         type("Tool", (), {"invoke": boom})(),
     )
-    assert _search_stock_news("公司600001") == []
+    assert _search_news(["公司600001"]) == []
 
 
 def test_strip_and_dedup_news_records():
