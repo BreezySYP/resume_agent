@@ -1,12 +1,16 @@
 """routers/status.py — checkpoint 状态查询"""
 from fastapi import APIRouter, Depends
+from service.etl_service import STEPS_META
+from shared.auth.deps import require_admin
+from shared.db.mysql import get_db
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from shared.db.mysql import get_db
-from service.etl_service import STEPS_META
-
-router = APIRouter(prefix="/api/status", tags=["ETL 状态"])
+router = APIRouter(
+    prefix="/api/status",
+    tags=["ETL 状态"],
+    dependencies=[Depends(require_admin)],
+)
 
 
 @router.get(

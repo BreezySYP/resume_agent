@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from memory.mem_service import MemoryService
 from memory.models import MemoryRecord, MemorySource, MemoryStatus, MemoryType
 from pydantic import BaseModel
+from shared.auth.deps import require_self_or_admin
 
 router = APIRouter(prefix="/api/ai", tags=["Memory"])
 
@@ -83,6 +84,7 @@ def _to_memory_list_item(record: MemoryRecord) -> MemoryListItem:
     "/users/{user_id}/memories",
     response_model=MemoryListResponse,
     summary="列出用户全部记忆",
+    dependencies=[Depends(require_self_or_admin)],
 )
 async def list_user_memories(
     user_id: str,

@@ -1,6 +1,7 @@
 [tool.uv.workspace]
 members = [
     "packages/*",
+    "src/auth_service",
     "src/dev_agent",
     "src/stock_agent",
     "src/stock_etl",
@@ -20,8 +21,10 @@ shared = { workspace = true }
 testpaths = ["tests"]
 addopts = "-p no:langsmith_plugin --cov=packages/shared/src/shared --cov=packages/rag_memory/src/rag_memory --cov=src/stock_agent --cov=src/stock_etl --cov-report=term-missing"
 pythonpath = [
+    "src",
     "packages/shared/src",
     "packages/rag_memory/src",
+    "src/auth_service",
     "src/stock_agent",
     "src/dev_agent",
     "src/stock_etl",

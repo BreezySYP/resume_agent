@@ -6,10 +6,11 @@ from typing import Any, List
 
 from eval.faithfulness import caculate_faithfulness_score
 from eval.feedback import build_faithfulness_claims
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 from observe.metrics import record_eval_scores, track_eval_run
 from pydantic import BaseModel, Field
+from shared.auth.deps import require_admin
 
 router = APIRouter(prefix="/api/ai", tags=["Eval"])
 
@@ -26,7 +27,11 @@ class FaithfulnessRequest(BaseModel):
     )
 
 
-@router.post("/faithfulness", summary="faithfulness 检查：只跑 claim 拆解 + 证据判定")
+@router.post(
+    "/faithfulness",
+    summary="faithfulness 检查：只跑 claim 拆解 + 证据判定",
+    dependencies=[Depends(require_admin)],
+)
 async def faithfulness_check(req: FaithfulnessRequest) -> dict:
     try:
         with track_eval_run():

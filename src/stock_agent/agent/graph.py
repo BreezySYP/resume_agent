@@ -71,7 +71,12 @@ def build_investment_agent(checkpointer):
     )
 
 
-async def ask_investment(question: str, job_id: str, thread_id: str = "default"):
+async def ask_investment(
+    question: str,
+    job_id: str,
+    thread_id: str = "default",
+    user_id: str | None = None,
+):
     """推荐入口"""
     config = {
         "configurable": {"thread_id": thread_id},
@@ -81,11 +86,18 @@ async def ask_investment(question: str, job_id: str, thread_id: str = "default")
     async with get_aredis_checkpointer() as cp:
         cp.setup()
         agent = build_investment_agent(checkpointer=cp)
-        result = await agent.ainvoke({"user_question": question, "thread_id": thread_id, "job_id": job_id}, config=config)
+        result = await agent.ainvoke(
+            {
+                "user_question": question,
+                "thread_id": thread_id,
+                "job_id": job_id,
+                "user_id": user_id or thread_id,
+            },
+            config=config,
+        )
 
     
     event.graph_finish(job_id, "END", result.get("final_answer", "获取最终答案失败，请查询日志"))
     
     return result
-
 

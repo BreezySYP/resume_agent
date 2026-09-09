@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from loguru import logger
+from service.conversation_auth import require_conversation_owner_or_admin
 from shared.agents.checkpoint import get_shared_aredis_checkpointer
 
 router = APIRouter(prefix="/api/ai", tags=["Conversation"])
@@ -44,7 +45,11 @@ def build_conversation(state: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-@router.get("/threads/{thread_id}/conversation", summary="获取短期 RedisSaver 中的对话")
+@router.get(
+    "/threads/{thread_id}/conversation",
+    summary="获取短期 RedisSaver 中的对话",
+    dependencies=[Depends(require_conversation_owner_or_admin)],
+)
 async def get_conversation(thread_id: str) -> dict:
     config = {"configurable": {"thread_id": thread_id}}
     try:
@@ -68,7 +73,11 @@ async def get_conversation(thread_id: str) -> dict:
     }
 
 
-@router.delete("/threads/{thread_id}", summary="清空某个线程的 RedisSaver 对话数据")
+@router.delete(
+    "/threads/{thread_id}",
+    summary="清空某个线程的 RedisSaver 对话数据",
+    dependencies=[Depends(require_conversation_owner_or_admin)],
+)
 async def delete_conversation(thread_id: str) -> dict:
     config = {"configurable": {"thread_id": thread_id}}
     try:

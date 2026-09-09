@@ -3,12 +3,39 @@ from api import eval_router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from observe.metrics import EVAL_RUNS
+from shared.auth.deps import get_current_user
+from shared.auth.errors import add_auth_exception_handlers
+
+ADMIN_USER = {
+    "id": "admin",
+    "email": "admin@example.com",
+    "name": "admin",
+    "avatar_url": None,
+    "is_admin": True,
+}
 
 
 def _client() -> TestClient:
     app = FastAPI()
     app.include_router(eval_router.router)
+    app.dependency_overrides[get_current_user] = lambda: ADMIN_USER
+    add_auth_exception_handlers(app)
     return TestClient(app)
+
+
+def test_faithfulness_endpoint_requires_admin():
+    app = FastAPI()
+    app.include_router(eval_router.router)
+    app.dependency_overrides[get_current_user] = lambda: {
+        **ADMIN_USER,
+        "is_admin": False,
+    }
+    add_auth_exception_handlers(app)
+    resp = TestClient(app).post(
+        "/api/ai/faithfulness",
+        json={"answer": "a", "question": "q", "rag_context": []},
+    )
+    assert resp.status_code == 403
 
 
 def test_faithfulness_endpoint(monkeypatch):

@@ -3,6 +3,17 @@ from api import conversation_router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from langchain_core.messages import HumanMessage, SystemMessage
+from service import conversation_auth
+from shared.auth.deps import get_current_user
+from shared.auth.errors import add_auth_exception_handlers
+
+FAKE_USER = {
+    "id": "u1",
+    "email": "u1@example.com",
+    "name": "u1",
+    "avatar_url": None,
+    "is_admin": False,
+}
 
 
 def test_build_conversation_from_messages_only():
@@ -87,10 +98,31 @@ def _patch_shared_cp(monkeypatch, cp):
     monkeypatch.setattr(conversation_router, "get_shared_aredis_checkpointer", _get)
 
 
+def _patch_owner(monkeypatch, *, owned: bool):
+    """绕过 MySQL：owned=True 时 t1 属于 u1，否则无归属记录。"""
+
+    def fake_get(thread_id: str):
+        if owned and thread_id == "t1":
+            return {"thread_id": thread_id, "user_id": "u1"}
+        return None
+
+    monkeypatch.setattr(conversation_auth, "get_thread_owner", fake_get)
+
+
 def _client() -> TestClient:
     app = FastAPI()
     app.include_router(conversation_router.router)
+    app.dependency_overrides[get_current_user] = lambda: FAKE_USER
+    add_auth_exception_handlers(app)
     return TestClient(app)
+
+
+def test_get_conversation_requires_login():
+    app = FastAPI()
+    app.include_router(conversation_router.router)
+    add_auth_exception_handlers(app)
+    resp = TestClient(app).get("/api/ai/threads/t1/conversation")
+    assert resp.status_code == 401
 
 
 def test_get_conversation_200(monkeypatch):
@@ -103,6 +135,7 @@ def test_get_conversation_200(monkeypatch):
     }
     cp = _FakeCP(_FakeSnapshot(state))
     _patch_shared_cp(monkeypatch, cp)
+    _patch_owner(monkeypatch, owned=True)
     resp = _client().get("/api/ai/threads/t1/conversation")
     assert resp.status_code == 200
     body = resp.json()
@@ -117,13 +150,26 @@ def test_get_conversation_200(monkeypatch):
 
 def test_get_conversation_404(monkeypatch):
     _patch_shared_cp(monkeypatch, _FakeCP(None))
+    _patch_owner(monkeypatch, owned=False)
     resp = _client().get("/api/ai/threads/nope/conversation")
+    assert resp.status_code == 404
+
+
+def test_get_conversation_other_users_thread_404(monkeypatch):
+    _patch_shared_cp(monkeypatch, _FakeCP(_FakeSnapshot({"messages": []})))
+
+    def fake_get(thread_id: str):
+        return {"thread_id": thread_id, "user_id": "someone-else"}
+
+    monkeypatch.setattr(conversation_auth, "get_thread_owner", fake_get)
+    resp = _client().get("/api/ai/threads/t1/conversation")
     assert resp.status_code == 404
 
 
 def test_delete_conversation_200(monkeypatch):
     cp = _FakeCP(_FakeSnapshot({"messages": []}))
     _patch_shared_cp(monkeypatch, cp)
+    _patch_owner(monkeypatch, owned=True)
     resp = _client().delete("/api/ai/threads/t1")
     assert resp.status_code == 200
     assert resp.json() == {"deleted": True, "thread_id": "t1"}
@@ -133,6 +179,7 @@ def test_delete_conversation_200(monkeypatch):
 def test_delete_conversation_404(monkeypatch):
     cp = _FakeCP(None)
     _patch_shared_cp(monkeypatch, cp)
+    _patch_owner(monkeypatch, owned=False)
     resp = _client().delete("/api/ai/threads/nope")
     assert resp.status_code == 404
     assert cp.deleted == []
@@ -140,6 +187,7 @@ def test_delete_conversation_404(monkeypatch):
 
 def test_get_conversation_503_when_redis_down(monkeypatch):
     _patch_shared_cp(monkeypatch, _BoomCP())
+    _patch_owner(monkeypatch, owned=True)
     resp = _client().get("/api/ai/threads/t1/conversation")
     assert resp.status_code == 503
     assert "Redis" in resp.json()["detail"]
@@ -147,5 +195,6 @@ def test_get_conversation_503_when_redis_down(monkeypatch):
 
 def test_delete_conversation_503_when_redis_down(monkeypatch):
     _patch_shared_cp(monkeypatch, _BoomCP())
+    _patch_owner(monkeypatch, owned=True)
     resp = _client().delete("/api/ai/threads/t1")
     assert resp.status_code == 503

@@ -23,8 +23,14 @@ db/
 │   └── mydb/                 # 数据库名 = 目录名
 │       ├── agent_memories.sql
 │       └── ...               # 每张有数据的表一份 SHOW CREATE TABLE 快照
-└── migrations/               # 未来迁移脚本（规划）：<时间戳>_<描述>/up.sql + down.sql
+└── migrations/               # 迁移脚本：<时间戳>_<描述>/up.sql + down.sql
+    ├── 20260908_0001_add_auth_tables/
+    └── 20260908_0002_add_conversation_threads/
 ```
+
+> 迁移脚本与基线是两套东西：基线记录“线上现在长什么样”，迁移描述“怎么从上一版变过来”。
+> 新表（users / oauth_accounts / conversations）用迁移脚本管理；它们当前为空表，
+> 按“空表暂不入基线”的约定暂不加入 `db/baseline/`。
 
 ## MySQL baseline（现状）
 

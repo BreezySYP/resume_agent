@@ -7,6 +7,16 @@ from fastapi.testclient import TestClient
 from memory.mem_service import MemoryService
 from memory.models import MemoryExtractItem, MemoryType
 from rag_memory.store import InMemoryMemoryStore
+from shared.auth.deps import get_current_user
+from shared.auth.errors import add_auth_exception_handlers
+
+FAKE_USER = {
+    "id": "u1",
+    "email": "u1@example.com",
+    "name": "u1",
+    "avatar_url": None,
+    "is_admin": False,
+}
 
 
 def _svc() -> MemoryService:
@@ -17,6 +27,8 @@ def _client(svc: MemoryService) -> TestClient:
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[_memory_service] = lambda: svc
+    app.dependency_overrides[get_current_user] = lambda: FAKE_USER
+    add_auth_exception_handlers(app)
     return TestClient(app)
 
 
@@ -132,3 +144,17 @@ def test_long_memory_content_is_truncated():
     assert item["content_truncated"] is True
     assert len(item["content"]) == 201  # 200 字符 + 省略号
     assert item["content"].endswith("…")
+
+
+def test_list_user_memories_rejects_other_user():
+    resp = _client(_svc()).get("/api/ai/users/other-user/memories")
+    assert resp.status_code == 403
+
+
+def test_list_user_memories_requires_login():
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[_memory_service] = lambda: _svc()
+    add_auth_exception_handlers(app)
+    resp = TestClient(app).get("/api/ai/users/u1/memories")
+    assert resp.status_code == 401

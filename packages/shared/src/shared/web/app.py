@@ -7,6 +7,7 @@ from fastapi import APIRouter, FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
+from shared.auth.errors import add_auth_exception_handlers
 from shared.configs.log_config import setup_logger
 from shared.configs.settings import CORS_ORIGINS
 
@@ -39,6 +40,7 @@ def create_app(
         logger.info("👋 {} 关闭", title)
 
     app = FastAPI(title=title, description=description, version=version, lifespan=lifespan)
+    add_auth_exception_handlers(app)
 
     origins = cors_origins if cors_origins is not None else CORS_ORIGINS
     app.add_middleware(

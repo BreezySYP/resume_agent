@@ -67,6 +67,21 @@ class Settings(BaseSettings):
     # ── Web ────────────────────────────────────────────────────────────
     cors_origins: list[str] = ["*"]
 
+    # ── Auth（GitHub OAuth + JWT Bearer token）────────────────────────
+    github_oauth_client_id: str = Field(default="", validation_alias="GITHUB_OAUTH_CLIENT_ID")
+    github_oauth_client_secret: str = Field(default="", validation_alias="GITHUB_OAUTH_CLIENT_SECRET")
+    auth_redirect_uri: str = Field(
+        default="http://localhost:8004/api/auth/callback/github",
+        validation_alias="AUTH_REDIRECT_URI",
+    )
+    auth_session_secret: str = Field(default="", validation_alias="AUTH_SESSION_SECRET")
+    auth_session_days: int = Field(default=7, validation_alias="AUTH_SESSION_DAYS")
+    auth_admin_github_logins: str = Field(default="", validation_alias="AUTH_ADMIN_GITHUB_LOGINS")
+    auth_frontend_origins: list[str] = Field(
+        default=["http://localhost:5173", "http://localhost:3000"],
+        validation_alias="AUTH_FRONTEND_ORIGINS",
+    )
+
     @property
     def graph_config(self) -> dict:
         return {"configurable": {"thread_id": self.thread_id}}

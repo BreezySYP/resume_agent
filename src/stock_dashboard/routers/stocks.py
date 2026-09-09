@@ -1,16 +1,19 @@
 """routers/stocks.py — 股票列表 & 详情 API"""
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
-from loguru import logger
-
-from shared.db.mysql import get_db
 from service.stock_service import (
-    get_stock_list,
-    get_stock_detail,
     get_all_step_status,
+    get_stock_detail,
+    get_stock_list,
 )
+from shared.auth.deps import require_read_or_admin
+from shared.db.mysql import get_db
+from sqlalchemy.orm import Session
 
-router = APIRouter(prefix="/api/stocks", tags=["股票数据"])
+router = APIRouter(
+    prefix="/api/stocks",
+    tags=["股票数据"],
+    dependencies=[Depends(require_read_or_admin)],
+)
 
 
 @router.get(

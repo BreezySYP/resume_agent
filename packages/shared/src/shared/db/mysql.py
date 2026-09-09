@@ -5,10 +5,17 @@ import pandas as pd
 import pymysql
 from dbutils.pooled_db import PooledDB
 from loguru import logger
-from sqlalchemy import create_engine, text, func
+from sqlalchemy import create_engine, text
 from sqlalchemy.dialects.mysql import insert as mysql_insert
-from shared.configs.settings import MYSQL_DB, MYSQL_HOST, MYSQL_PASSWORD, MYSQL_PORT, MYSQL_ROOT_USER
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker
+
+from shared.configs.settings import (
+    MYSQL_DB,
+    MYSQL_HOST,
+    MYSQL_PASSWORD,
+    MYSQL_PORT,
+    MYSQL_ROOT_USER,
+)
 
 logger.info("Connecting to MySQL: {}@{}:{}/{}", MYSQL_ROOT_USER, MYSQL_HOST, MYSQL_PORT, MYSQL_DB)
 
@@ -26,15 +33,20 @@ engine = create_engine(
     },
 )
 
-logger.info("connected to db")
+_pool: PooledDB | None = None
 
-pool = PooledDB(
-    creator=pymysql, maxconnections=6, mincached=2, maxcached=5, blocking=True,
-    host=MYSQL_HOST, port=MYSQL_PORT, user=MYSQL_ROOT_USER,
-    password=MYSQL_PASSWORD, database=MYSQL_DB, charset="utf8mb4",
-)
 
-logger.info("db pool ready")
+def _get_pool() -> PooledDB:
+    """惰性创建连接池：import 阶段不连接 MySQL，首次使用时才建连。"""
+    global _pool
+    if _pool is None:
+        _pool = PooledDB(
+            creator=pymysql, maxconnections=6, mincached=0, maxcached=5, blocking=True,
+            host=MYSQL_HOST, port=MYSQL_PORT, user=MYSQL_ROOT_USER,
+            password=MYSQL_PASSWORD, database=MYSQL_DB, charset="utf8mb4",
+        )
+        logger.info("db pool ready")
+    return _pool
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -49,7 +61,7 @@ def get_db():
 
     
 def get_connection():
-    return pool.connection()
+    return _get_pool().connection()
 
 
 def get_tables() -> list[str]:

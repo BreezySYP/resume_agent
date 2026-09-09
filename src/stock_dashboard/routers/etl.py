@@ -1,27 +1,25 @@
 """routers/etl.py — ETL 触发 & SSE 进度推送"""
 from __future__ import annotations
-import asyncio
+
 from typing import List, Optional
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Query
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-from loguru import logger
-
-from shared.db.mysql import get_db
 from service.etl_service import (
-    STEPS_META,
     PER_STOCK_STEPS,
-    DAILY_STEPS,
-    SEASON_STEPS,
-    create_job,
-    run_step_async,
-    sse_stream,
+    STEPS_META,
+    get_job_logs,
     get_running_jobs,
-    get_job_logs
 )
+from shared.auth.deps import require_admin
+from shared.db.mysql import get_db
+from sqlalchemy.orm import Session
 
-router = APIRouter(prefix="/api/etl", tags=["ETL 任务"])
+router = APIRouter(
+    prefix="/api/etl",
+    tags=["ETL 任务"],
+    dependencies=[Depends(require_admin)],
+)
 
 
 # ── Request / Response Models ─────────────────────────────────────────────────

@@ -36,5 +36,6 @@ class AgentState(TypedDict):
     markdown: str
     thread_id: str
     job_id: str
+    user_id: str
     ragas_result: dict
     memory_context: str

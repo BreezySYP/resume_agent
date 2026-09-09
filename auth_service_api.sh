@@ -1,0 +1,1 @@
+cd src/auth_service && uv run uvicorn main:app --host localhost --port 8016 --reload

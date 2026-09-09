@@ -7,6 +7,30 @@
 
 services:
 
+  # ── Auth ─────────────────────────────────────────────────
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.auth_service
+    image: monorepo/auth-service:latest
+    ports:
+      - "8014:8014"
+    env_file: ./.env.prod
+    depends_on:
+      redis:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    networks: [agent-net]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8014/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
   # ── Agents ────────────────────────────────────────────────
 
   dev-agent:
