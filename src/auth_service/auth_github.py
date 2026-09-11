@@ -6,7 +6,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 import httpx
-from shared.configs.settings import get_settings
+from auth_config import get_auth_service_settings
 
 GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
 GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
@@ -19,7 +19,7 @@ class GitHubOAuthError(Exception):
 
 
 def build_authorize_url(state: str) -> str:
-    cfg = get_settings()
+    cfg = get_auth_service_settings()
     params = {
         "client_id": cfg.github_oauth_client_id,
         "redirect_uri": cfg.auth_redirect_uri,
@@ -31,7 +31,7 @@ def build_authorize_url(state: str) -> str:
 
 async def exchange_code(code: str) -> str:
     """用授权码换 access_token。"""
-    cfg = get_settings()
+    cfg = get_auth_service_settings()
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.post(
             GITHUB_TOKEN_URL,

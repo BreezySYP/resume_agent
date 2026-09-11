@@ -25,7 +25,8 @@ db/
 │       └── ...               # 每张有数据的表一份 SHOW CREATE TABLE 快照
 └── migrations/               # 迁移脚本：<时间戳>_<描述>/up.sql + down.sql
     ├── 20260908_0001_add_auth_tables/
-    └── 20260908_0002_add_conversation_threads/
+    ├── 20260908_0002_add_conversation_threads/
+    └── 20260910_0003_add_personal_access_tokens/
 ```
 
 > 迁移脚本与基线是两套东西：基线记录“线上现在长什么样”，迁移描述“怎么从上一版变过来”。

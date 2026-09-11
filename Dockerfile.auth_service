@@ -13,5 +13,5 @@ COPY src ./src
 RUN uv sync --package auth_service --no-dev
 
 WORKDIR /app/src/auth_service
-EXPOSE 8014
-CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8014"]
+EXPOSE 8016
+CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8016"]

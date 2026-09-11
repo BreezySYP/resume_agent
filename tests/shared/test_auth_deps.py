@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 import pytest
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
-from shared.auth.deps import require_admin, require_read_or_admin, require_self_or_admin
+from shared.auth.deps import (
+    get_current_user,
+    require_admin,
+    require_read_or_admin,
+    require_self_or_admin,
+)
 from shared.auth.errors import (
     NotFoundError,
     PermissionDeniedError,
     UnauthorizedError,
     add_auth_exception_handlers,
 )
+from shared.configs.settings import get_settings
 from starlette.requests import Request
 
 NORMAL_USER = {
@@ -97,3 +103,95 @@ def test_domain_errors_map_to_http_status() -> None:
     assert client.get("/e401").status_code == 401
     assert client.get("/e403").status_code == 403
     assert client.get("/e404").status_code == 404
+
+
+def test_openapi_declares_bearer_security_for_swagger() -> None:
+    """受保护路由通过 HTTPBearer 依赖自动声明 security，Swagger 出现 Authorize 按钮。"""
+    app = FastAPI()
+    add_auth_exception_handlers(app)
+
+    @app.get("/protected")
+    def _protected(user: dict = Depends(get_current_user)):
+        return user
+
+    schema = app.openapi()
+    assert schema["components"]["securitySchemes"]["HTTPBearer"]["scheme"] == "bearer"
+    assert schema["paths"]["/protected"]["get"]["security"] == [{"HTTPBearer": []}]
+
+
+def test_service_token_bypasses_users_table(monkeypatch) -> None:
+    """typ=service 的 JWT 按声明授权，不查 users 表。"""
+    from tests.auth_keys_helper import configure, make_token
+
+    configure(monkeypatch)
+    token = make_token(sub="client:dashboard", typ="service", admin=True)
+
+    app = FastAPI()
+    add_auth_exception_handlers(app)
+
+    @app.get("/protected")
+    def _protected(user: dict = Depends(get_current_user)):
+        return user
+
+    client = TestClient(app)
+    resp = client.get("/protected", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    assert resp.json()["id"] == "client:dashboard"
+    assert resp.json()["is_admin"] is True
+
+
+def test_pat_token_authenticates_without_jwt_secret(monkeypatch) -> None:
+    """Bearer pat_xxx 走 PAT 查库路径，不需要任何 JWT 密钥配置。"""
+    from shared.auth import deps as deps_module
+    from shared.auth import token as token_module
+
+    monkeypatch.setattr(
+        deps_module, "verify_pat", lambda token: {"user_id": "u1", "is_admin": True}
+    )
+    monkeypatch.setattr(
+        deps_module,
+        "get_user",
+        lambda user_id: {
+            "id": user_id,
+            "email": "u1@example.com",
+            "name": "u1",
+            "avatar_url": None,
+            "is_admin": False,
+        },
+    )
+    # 故意不配置任何 JWT 密钥，证明 PAT 路径不依赖 JWT
+    cfg = get_settings()
+    monkeypatch.setattr(cfg, "auth_jwt_public_key_b64", "")
+    token_module.reset_key_cache()
+
+    app = FastAPI()
+    add_auth_exception_handlers(app)
+
+    @app.get("/protected")
+    def _protected(user: dict = Depends(get_current_user)):
+        return user
+
+    resp = TestClient(app).get(
+        "/protected", headers={"Authorization": "Bearer pat_some_opaque_key"}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["id"] == "u1"
+    assert resp.json()["is_admin"] is True  # 采用 token 记录固化的权限
+
+
+def test_pat_token_rejected_when_invalid(monkeypatch) -> None:
+    from shared.auth import deps as deps_module
+
+    monkeypatch.setattr(deps_module, "verify_pat", lambda token: None)
+
+    app = FastAPI()
+    add_auth_exception_handlers(app)
+
+    @app.get("/protected")
+    def _protected(user: dict = Depends(get_current_user)):
+        return user
+
+    resp = TestClient(app).get(
+        "/protected", headers={"Authorization": "Bearer pat_revoked"}
+    )
+    assert resp.status_code == 401

@@ -13,6 +13,7 @@ wheels/
 
 .env.prod
 .env
+.env.auth
 
 *.pckl
 

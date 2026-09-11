@@ -88,6 +88,13 @@ def test_env_example_has_no_real_secrets():
     assert not suspicious, f".env.example 疑似包含真实密钥: {suspicious}"
 
 
+def test_shared_settings_never_expose_private_key():
+    """shared 是共享代码：绝不能出现私钥类配置（私钥只属于 auth_service）。"""
+    names = list(_settings_env_names().values())
+    leaked = [n for n in names if "PRIVATE" in n.upper()]
+    assert not leaked, f"shared Settings 不应包含私钥配置: {leaked}"
+
+
 @pytest.mark.skipif(not (_PROJECT_ROOT / ".env").exists(), reason="本地 .env 不存在")
 def test_real_env_overrides_dotenv_file():
     """容器部署契约：真实环境变量优先于 .env 文件（即使镜像内存在 .env）。"""

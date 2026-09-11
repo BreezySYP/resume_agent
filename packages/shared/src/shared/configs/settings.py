@@ -67,20 +67,12 @@ class Settings(BaseSettings):
     # ── Web ────────────────────────────────────────────────────────────
     cors_origins: list[str] = ["*"]
 
-    # ── Auth（GitHub OAuth + JWT Bearer token）────────────────────────
-    github_oauth_client_id: str = Field(default="", validation_alias="GITHUB_OAUTH_CLIENT_ID")
-    github_oauth_client_secret: str = Field(default="", validation_alias="GITHUB_OAUTH_CLIENT_SECRET")
-    auth_redirect_uri: str = Field(
-        default="http://localhost:8004/api/auth/callback/github",
-        validation_alias="AUTH_REDIRECT_URI",
-    )
-    auth_session_secret: str = Field(default="", validation_alias="AUTH_SESSION_SECRET")
-    auth_session_days: int = Field(default=7, validation_alias="AUTH_SESSION_DAYS")
-    auth_admin_github_logins: str = Field(default="", validation_alias="AUTH_ADMIN_GITHUB_LOGINS")
-    auth_frontend_origins: list[str] = Field(
-        default=["http://localhost:5173", "http://localhost:3000"],
-        validation_alias="AUTH_FRONTEND_ORIGINS",
-    )
+    # ── Auth：shared 只保留「验签公钥」────────────────────────────────
+    # 各 API 服务用 AUTH_JWT_PUBLIC_KEY_B64（base64 PEM）离线验签，无网络请求。
+    # 其余鉴权配置（私钥、GitHub OAuth、前端白名单、client credentials 等）
+    # 都只被 auth_service 使用，定义在 src/auth_service/auth_config.py——
+    # shared 作为全仓库共享代码，不应承载任何业务服务的私有密钥与配置。
+    auth_jwt_public_key_b64: str = Field(default="", validation_alias="AUTH_JWT_PUBLIC_KEY_B64")
 
     @property
     def graph_config(self) -> dict:

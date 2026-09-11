@@ -1,66 +1,66 @@
-"""shared/auth：JWT 验证（auth_service 的登录/签发测试在 tests/auth_service）。"""
+"""shared/auth：RS256 token 验证（auth_service 的登录/签发测试在 tests/test_auth_service.py）。"""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
-import jwt
 from shared.auth.token import TokenError, decode_access_token
 from shared.configs.settings import get_settings
 
-TEST_SECRET = "test-secret-" * 4
-
-
-def _cfg(monkeypatch):
-    cfg = get_settings()
-    monkeypatch.setattr(cfg, "auth_session_secret", TEST_SECRET)
-    return cfg
-
-
-def _encode(token_typ: str = "access", secret: str = TEST_SECRET) -> str:
-    now = datetime.now(UTC)
-    return jwt.encode(
-        {
-            "sub": "u1",
-            "iat": now,
-            "exp": now + timedelta(days=1),
-            "typ": token_typ,
-        },
-        secret,
-        algorithm="HS256",
-    )
+from tests.auth_keys_helper import configure, make_token, other_private_key
 
 
 def test_decode_access_token_ok(monkeypatch):
-    _cfg(monkeypatch)
-    payload = decode_access_token(_encode())
+    configure(monkeypatch)
+    payload = decode_access_token(make_token(sub="u1"))
     assert payload["sub"] == "u1"
     assert payload["typ"] == "access"
 
 
-def test_decode_access_token_rejects_wrong_secret(monkeypatch):
-    _cfg(monkeypatch)
+def test_decode_service_token_ok(monkeypatch):
+    configure(monkeypatch)
+    payload = decode_access_token(make_token(sub="client:dashboard", typ="service", admin=True))
+    assert payload["typ"] == "service"
+    assert payload["admin"] is True
+
+
+def test_decode_rejects_token_signed_by_other_key(monkeypatch):
+    """换一把私钥签的 token 必须被拒——这是 RS256 相对共享密钥的核心收益。"""
+    configure(monkeypatch)
+    forged = make_token(key=other_private_key())
     try:
-        decode_access_token(_encode(secret="another-secret-" * 4))
+        decode_access_token(forged)
     except TokenError:
         return
     raise AssertionError("expected TokenError")
 
 
-def test_decode_access_token_rejects_non_access_type(monkeypatch):
-    _cfg(monkeypatch)
+def test_decode_rejects_non_allowed_type(monkeypatch):
+    configure(monkeypatch)
     try:
-        decode_access_token(_encode(token_typ="refresh"))
+        decode_access_token(make_token(typ="refresh"))
     except TokenError:
         return
     raise AssertionError("expected TokenError")
 
 
-def test_decode_access_token_requires_secret(monkeypatch):
-    token = _encode()
-    _cfg(monkeypatch)  # 先恢复有效 secret 语境
+def test_decode_rejects_expired_token(monkeypatch):
+    configure(monkeypatch)
+    expired = make_token(expires_in=timedelta(seconds=-10))
+    try:
+        decode_access_token(expired)
+    except TokenError:
+        return
+    raise AssertionError("expected TokenError")
+
+
+def test_decode_requires_configured_public_key(monkeypatch):
+    token = make_token()
     cfg = get_settings()
-    monkeypatch.setattr(cfg, "auth_session_secret", "")  # 再清空模拟未配置
+    monkeypatch.setattr(cfg, "auth_jwt_public_key_b64", "")
+    from shared.auth import token as token_module
+
+    token_module.reset_key_cache()
     try:
         decode_access_token(token)
     except TokenError:
